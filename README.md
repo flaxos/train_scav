@@ -20,7 +20,7 @@ Controls:
 
 - `W` / `Up`: increase throttle
 - `S` / `Down`: decrease throttle
-- `Space`: brake
+- `Space`: brake and cut throttle
 - `R`: reverse direction while stopped
 - `E`: change points/switch
 
@@ -53,6 +53,20 @@ XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
 XDG_DATA_HOME=/tmp/train_scav_godot/data \
 XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
 /home/flax/bin/godot --headless --path . --script tests/sprint1_acceptance.gd
+```
+
+Run the Sprint 1 scene visibility and control checks:
+
+```bash
+XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
+XDG_DATA_HOME=/tmp/train_scav_godot/data \
+XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
+/home/flax/bin/godot --headless --path . --script tests/sprint1_visual_scene.gd
+
+XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
+XDG_DATA_HOME=/tmp/train_scav_godot/data \
+XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
+/home/flax/bin/godot --headless --path . --script tests/sprint1_scene_controls.gd
 ```
 
 If resource imports need to be refreshed explicitly, run:

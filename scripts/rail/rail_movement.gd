@@ -22,6 +22,7 @@ var speed: float = 0.0
 var throttle: float = 0.0
 var direction: int = 1
 var points_route: String = POINTS_MAIN
+var brake_active: bool = false
 var blocked_reason: String = ""
 
 var max_speed: float = 150.0
@@ -31,6 +32,7 @@ var coast_deceleration: float = 35.0
 
 
 func step(delta: float, brake_active: bool) -> void:
+	self.brake_active = brake_active
 	blocked_reason = ""
 	_update_speed(delta, brake_active)
 	_advance(speed * float(direction) * delta)
@@ -111,6 +113,7 @@ func get_debug_lines() -> Array[String]:
 	lines.append("Speed: %.1f" % speed)
 	lines.append("Throttle: %d%%" % roundi(throttle * 100.0))
 	lines.append("Direction: %s" % direction_label)
+	lines.append("Brake: %s" % _format_bool(brake_active))
 	lines.append("Points: %s" % points_route)
 	if blocked_reason != "":
 		lines.append("Blocked: %s" % blocked_reason)
@@ -123,6 +126,7 @@ func get_track_segments() -> Dictionary:
 
 func _update_speed(delta: float, brake_active: bool) -> void:
 	if brake_active:
+		throttle = 0.0
 		speed = maxf(speed - brake_deceleration * delta, 0.0)
 		return
 
@@ -132,6 +136,12 @@ func _update_speed(delta: float, brake_active: bool) -> void:
 		rate = coast_deceleration
 
 	speed = move_toward(speed, target_speed, rate * delta)
+
+
+func _format_bool(value: bool) -> String:
+	if value:
+		return "on"
+	return "off"
 
 
 func _advance(amount: float) -> void:
