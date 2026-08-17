@@ -1,0 +1,8 @@
+# Godot-generated project data.
+.godot/
+.import/
+*.translation
+
+# Local export/cache output.
+export.cfg
+*.tmp
