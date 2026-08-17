@@ -1,52 +1,59 @@
-# Current Sprint — Sprint 1: Train Moves on Rails
+# Current Sprint - Sprint 2: Rolling Stock and Consist Operations
 
-**Status:** READY TO START
+**Status:** IMPLEMENTED - READY FOR HUMAN PLAYTEST
 
 ## Sprint objective
-Build the first playable rail movement prototype: one locomotive constrained to a hand-authored track layout with one main line, one siding and one points/switch.
+Build the first playable consist prototype: a locomotive and wagons that can be physically coupled, decoupled and reassembled in a hand-authored test yard.
 
 ## Hypothesis
-Track-constrained real-time movement can feel controllable enough for later shunting.
+Physical coupling/decoupling and consist manipulation is satisfying enough to justify the larger game.
 
 ## In scope
-- One locomotive using programmer art.
-- One main track.
-- One branch/siding.
-- One points/switch object.
-- Forward/reverse command.
-- Throttle/basic speed control.
-- Brake/stop.
-- Track-following movement.
-- Visible debug state.
+- Minimum two wagon types using programmer art.
+- Front/rear couplers.
+- Coupled consist movement.
+- Decoupling.
+- Recoupling.
+- Basic mass aggregation.
+- Simple low-speed coupling constraints.
+- Hand-authored test yard.
+- Visible debug state for consist, couplers, mass and switching.
 - Headless validation of the core acceptance route where practical.
 
 ## Out of scope
 Do NOT implement:
-- wagons/couplers;
 - crew;
-- inventory/resources;
+- survivor tasks;
+- resources/inventory;
 - procedural generation;
 - combat;
 - final UI;
 - final art;
-- Google/Gemini image generation integration;
+- multi-locomotive operations;
+- advanced braking/air-line simulation;
+- damage/maintenance;
+- save/load;
 - plugins/addons unless required merely to run the existing project.
 
 ## Acceptance test
-Sprint 1 is complete only when all are true:
+Sprint 2 is complete only when all are true:
 
-- [ ] The player can drive the locomotive from the main line into the siding.
-- [ ] The player can stop the locomotive.
-- [ ] The player can reverse the locomotive.
-- [ ] The player can change the points/switch.
-- [ ] The player can return the locomotive to the main line reliably.
-- [ ] Visible debug state shows the current track segment, speed, direction, throttle and points state.
-- [ ] No known GDScript parser errors remain.
-- [ ] `git status` is understood and unrelated user work is preserved.
-- [ ] A repeatable validation command/process is recorded in `README.md` or this file.
+- [x] The yard starts with `[L][A][B]` coupled on the main line and `[C]` on a siding.
+- [x] At least two wagon types are visible using programmer art.
+- [x] Rolling stock exposes front/rear coupler state.
+- [x] The coupled consist moves as one physical train under locomotive control.
+- [x] The player can decouple `B` from `[L][A][B]` without teleporting or reordering wagons.
+- [x] The player can move `[L][A]` through the points to the siding and couple `C` at low speed.
+- [x] Coupling is blocked when the active consist is moving too fast.
+- [x] The player can return to the main line and recouple `B`, producing `[L][A][C][B]`.
+- [x] Basic total mass changes as wagons are removed and added.
+- [x] Visible debug state shows consist order, speed, throttle, direction, brake state, points route, mass and coupler status.
+- [x] No known GDScript parser errors remain.
+- [x] `git status` is understood and unrelated user work is preserved.
+- [x] A repeatable validation command/process is recorded in `README.md` or this file.
 
 ## Definition of done
-A playable rail movement prototype is more important than architectural completeness. Do not pre-build future shunting, consist, crew, resource, combat or procedural systems.
+The player must physically perform the shunting sequence in the test yard. Do not add colony, crew, resource, procedural, combat or presentation systems to compensate for unclear consist interaction.
 
 ## Next sprint
-After Sprint 1 acceptance, replace this file's active content with Sprint 2 from `ROADMAP.md`: **Rolling Stock and Consist Operations**.
+After Sprint 2 acceptance, replace this file's active content with Sprint 3 from `ROADMAP.md`: **Crew exists physically**.

@@ -4,9 +4,9 @@ Top-down 2D Godot train-survival colony prototype.
 
 ## Active Sprint
 
-Sprint 1: Train Moves on Rails.
+Sprint 2: Rolling Stock and Consist Operations.
 
-This sprint validates a single locomotive moving on hand-authored rail geometry with one siding and one switch.
+This sprint validates a small physical shunting loop: start with `[L][A][B]` on the main line and recover `[C]` from the siding to produce `[L][A][C][B]` through movement, points, coupling and decoupling.
 
 ## Play
 
@@ -23,6 +23,8 @@ Controls:
 - `Space`: brake and cut throttle
 - `R`: reverse direction while stopped
 - `E`: change points/switch
+- `Q`: decouple the rear wagon while stopped
+- `C`: couple an aligned wagon at low speed
 
 ## Verified Local Toolchain
 
@@ -67,6 +69,24 @@ XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
 XDG_DATA_HOME=/tmp/train_scav_godot/data \
 XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
 /home/flax/bin/godot --headless --path . --script tests/sprint1_scene_controls.gd
+```
+
+Run the Sprint 2 acceptance simulation:
+
+```bash
+XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
+XDG_DATA_HOME=/tmp/train_scav_godot/data \
+XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
+/home/flax/bin/godot --headless --path . --script tests/sprint2_acceptance.gd
+```
+
+Run the Sprint 2 scene control check:
+
+```bash
+XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
+XDG_DATA_HOME=/tmp/train_scav_godot/data \
+XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
+/home/flax/bin/godot --headless --path . --script tests/sprint2_scene_controls.gd
 ```
 
 If resource imports need to be refreshed explicitly, run:
