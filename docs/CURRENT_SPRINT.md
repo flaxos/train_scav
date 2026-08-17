@@ -1,29 +1,27 @@
-# Current Sprint — Sprint 0: Project Skeleton
+# Current Sprint — Sprint 1: Train Moves on Rails
 
 **Status:** READY TO START
 
 ## Sprint objective
-Establish a disciplined, runnable Godot project and Codex workflow before implementing gameplay systems.
+Build the first playable rail movement prototype: one locomotive constrained to a hand-authored track layout with one main line, one siding and one points/switch.
 
 ## Hypothesis
-A small, clean project skeleton with explicit scope rules will make subsequent prototype work faster and prevent scope creep/rabbit-hole development.
+Track-constrained real-time movement can feel controllable enough for later shunting.
 
 ## In scope
-- Detect and document installed Godot/Codex/Git versions.
-- Confirm the Godot project opens/runs.
-- Establish a minimal project directory structure based on actual usage.
-- Add this documentation pack to the repository.
-- Create a minimal `Main`/prototype scene if one does not exist.
-- Add a simple visible build/project label to prove the scene launches.
-- Add the simplest practical project validation command for the local environment.
-- Add/update `.gitignore` for Godot-generated files as needed.
-- Confirm Codex loads `AGENTS.md`.
-- Create a clean Git checkpoint after validation.
+- One locomotive using programmer art.
+- One main track.
+- One branch/siding.
+- One points/switch object.
+- Forward/reverse command.
+- Throttle/basic speed control.
+- Brake/stop.
+- Track-following movement.
+- Visible debug state.
+- Headless validation of the core acceptance route where practical.
 
 ## Out of scope
 Do NOT implement:
-- train movement;
-- railway geometry;
 - wagons/couplers;
 - crew;
 - inventory/resources;
@@ -35,18 +33,20 @@ Do NOT implement:
 - plugins/addons unless required merely to run the existing project.
 
 ## Acceptance test
-Sprint 0 is complete only when all are true:
+Sprint 1 is complete only when all are true:
 
-- [ ] The Godot project launches a minimal prototype scene successfully.
+- [ ] The player can drive the locomotive from the main line into the siding.
+- [ ] The player can stop the locomotive.
+- [ ] The player can reverse the locomotive.
+- [ ] The player can change the points/switch.
+- [ ] The player can return the locomotive to the main line reliably.
+- [ ] Visible debug state shows the current track segment, speed, direction, throttle and points state.
 - [ ] No known GDScript parser errors remain.
 - [ ] `git status` is understood and unrelated user work is preserved.
-- [ ] `AGENTS.md` and `docs/` are present in the repository.
-- [ ] Codex can summarise the loaded project instructions and identify Sprint 0 as active.
 - [ ] A repeatable validation command/process is recorded in `README.md` or this file.
-- [ ] A Git checkpoint/commit exists for the completed skeleton unless the user explicitly declines committing.
 
 ## Definition of done
-A runnable skeleton is more important than architectural completeness. Do not pre-build future systems.
+A playable rail movement prototype is more important than architectural completeness. Do not pre-build future shunting, consist, crew, resource, combat or procedural systems.
 
 ## Next sprint
-After Sprint 0 acceptance, replace this file's active content with Sprint 1 from `ROADMAP.md`: **Train Moves on Rails**.
+After Sprint 1 acceptance, replace this file's active content with Sprint 2 from `ROADMAP.md`: **Rolling Stock and Consist Operations**.
