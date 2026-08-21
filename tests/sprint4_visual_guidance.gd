@@ -51,6 +51,7 @@ func _init() -> void:
 	_expect(_route_has_option(route_states, "P2", "branch", RailMovement.SEGMENT_SIDING_B), "P2 exposes branch route to workshop siding")
 	_expect(_route_control_label_contains(route_states, "P2", "controls"), "P2 visual state explains which turnout it controls")
 	_expect(_active_route_kind(route_states, "P2") == "straight", "P2 starts with straight route highlighted")
+	_expect(_p2_branch_guide_points_with_track(route_states, p2_branch_position), "P2 branch guide points toward the actual north/east workshop branch")
 	_expect(scene.yard.manual_operate_point(YardOperations.POINT_P2), "fixture can operate P2 for visual route-state check")
 	route_states = scene.get_switch_route_visual_states()
 	_expect(_active_route_kind(route_states, "P2") == "branch", "P2 branch route is highlighted after operation")
@@ -73,6 +74,11 @@ func _init() -> void:
 	var route_segment: Array = scene.rail.get_track_segments()[RailMovement.SEGMENT_SIDING_B]
 	_expect(route_segment.size() >= 6, "workshop siding uses enough rail points for a readable bend")
 	_expect(_max_turn_delta(route_segment) <= 0.55, "workshop siding avoids abrupt unrealistic angle changes")
+	var main_segment: Array = scene.rail.get_track_segments()[RailMovement.SEGMENT_MAIN_EAST]
+	var main_tangent := ((main_segment[main_segment.size() - 1] as Vector2) - (main_segment[main_segment.size() - 2] as Vector2)).normalized()
+	var branch_tangent := ((route_segment[1] as Vector2) - (route_segment[0] as Vector2)).normalized()
+	_expect(absf(angle_difference(main_tangent.angle(), branch_tangent.angle())) <= 0.35, "P2 branch leaves the main as a plausible facing turnout instead of bending back on itself")
+	_expect((route_segment[1] as Vector2).x > (route_segment[0] as Vector2).x, "P2 north branch initially continues east before curving north")
 	_expect((route_segment[0] as Vector2).distance_to(p2_branch_position) <= 1.0, "P2 controlled branch begins at the P2 turnout")
 	_expect(_points_bounds(route_segment).position.y < p2_branch_position.y - 20.0, "P2 controlled branch is the visible north branch")
 	var bounds: Rect2 = scene.get_world_bounds()
@@ -134,6 +140,18 @@ func _route_has_option(routes: Array[Dictionary], point_id: String, option_kind:
 		if str(option_state.get("kind", "")) == option_kind \
 				and str(option_state.get("target_segment", "")) == target_segment:
 			return true
+	return false
+
+
+func _p2_branch_guide_points_with_track(routes: Array[Dictionary], p2_position: Vector2) -> bool:
+	var state := _route_state(routes, "P2")
+	var options: Array = state.get("options", [])
+	for option in options:
+		var option_state := option as Dictionary
+		if str(option_state.get("kind", "")) != "branch":
+			continue
+		var guide_end := option_state.get("guide_end", p2_position) as Vector2
+		return guide_end.x > p2_position.x and guide_end.y < p2_position.y
 	return false
 
 

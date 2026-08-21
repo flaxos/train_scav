@@ -11,6 +11,8 @@ func _init() -> void:
 	_diverging_siding_has_nonzero_local_tangent()
 	_consist_spanning_switch_uses_per_unit_angles()
 	_reverse_direction_does_not_flip_physical_unit_orientation()
+	_reverse_p1_trailing_move_preserves_traversed_branch()
+	_reverse_p2_trailing_move_preserves_traversed_branch()
 	_visual_orientation_queries_do_not_change_contact_results()
 
 	_finish()
@@ -79,6 +81,61 @@ func _reverse_direction_does_not_flip_physical_unit_orientation() -> void:
 	_expect(not forward_l.is_empty() and not reverse_l.is_empty(), "locomotive draw states exist for forward and reverse")
 	if not forward_l.is_empty() and not reverse_l.is_empty():
 		_expect(is_equal_approx(float(forward_l["angle"]), float(reverse_l["angle"])), "reverse travel preserves physical orientation from track tangent")
+
+
+func _reverse_p1_trailing_move_preserves_traversed_branch() -> void:
+	var sim = RailMovement.new()
+	sim.active_units = _typed_units(["L", "A", "B"])
+	var detached_consists: Array[Dictionary] = []
+	sim.detached_consists = detached_consists
+	sim.current_segment = RailMovement.SEGMENT_MAIN_EAST
+	sim.distance = 1.0
+	sim.direction = -1
+	sim.speed = 8.0
+	sim.throttle = 1.0
+	sim.max_speed = 8.0
+	sim.acceleration = 0.0
+	sim.coast_deceleration = 0.0
+
+	# Deliberately set P1 toward SIDING. A consist already reversing from
+	# MAIN_EAST is making a trailing move onto the common MAIN_WEST leg; its
+	# vehicles must remain on MAIN_EAST while they physically clear the turnout.
+	sim.set_points_route(RailMovement.POINTS_SIDING)
+	sim.step(0.25, false)
+
+	_expect(sim.current_segment == RailMovement.SEGMENT_MAIN_WEST, "reverse P1 move enters common main-west leg")
+	var states := _active_states(sim.get_unit_draw_states())
+	var occupied_segments := _state_segments(states)
+	_expect(occupied_segments.has(RailMovement.SEGMENT_MAIN_EAST), "P1 straddling consist retains the branch it actually came from")
+	_expect(not occupied_segments.has(RailMovement.SEGMENT_SIDING), "P1 reverse move does not jump onto the currently selected facing branch")
+
+
+func _reverse_p2_trailing_move_preserves_traversed_branch() -> void:
+	var sim = RailMovement.new()
+	sim.active_units = _typed_units(["S", "W"])
+	var detached_consists: Array[Dictionary] = []
+	sim.detached_consists = detached_consists
+	sim.controlled_power_unit_id = "S"
+	sim.set_powered_unit_condition("S", RailMovement.CONDITION_OPERATIONAL)
+	sim.current_segment = RailMovement.SEGMENT_SIDING_B
+	sim.distance = 1.0
+	sim.direction = -1
+	sim.speed = 8.0
+	sim.throttle = 1.0
+	sim.max_speed = 8.0
+	sim.acceleration = 0.0
+	sim.coast_deceleration = 0.0
+	sim.set_yard_point_route("P2", RailMovement.POINTS_SIDING)
+	sim.step(0.25, false)
+
+	_expect(sim.current_segment == RailMovement.SEGMENT_MAIN_EAST, "reverse P2 move enters common main-east leg")
+	# Directly mutate the now-future facing route to prove draw-state resolution
+	# uses traversed history, not the live switch. Normal gameplay occupancy rules
+	# prevent this switch throw while the consist is physically on the turnout.
+	sim.set_yard_point_route("P2", RailMovement.POINTS_MAIN)
+	var states := _active_states(sim.get_unit_draw_states())
+	var occupied_segments := _state_segments(states)
+	_expect(occupied_segments.has(RailMovement.SEGMENT_SIDING_B), "P2 straddling consist retains workshop branch history")
 
 
 func _visual_orientation_queries_do_not_change_contact_results() -> void:

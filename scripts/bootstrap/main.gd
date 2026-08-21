@@ -299,7 +299,7 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 			"point_id": YardOperations.POINT_P2,
 			"position": p2_position,
 			"control_label": "P2 controls north workshop branch",
-			"label_position": p2_position + Vector2(-204.0, -76.0),
+			"label_position": p2_position + Vector2(-92.0, -102.0),
 			"active_kind": p2_active_kind,
 			"options": [
 				{
@@ -318,9 +318,9 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 					"label": _format_route_option_label("branch", "NORTH W", p2_active_kind == "branch"),
 					"target_segment": RailMovement.SEGMENT_SIDING_B,
 					"active": p2_active_kind == "branch",
-					"guide_start": p2_position + Vector2(-4.0, -8.0),
-					"guide_end": p2_position + Vector2(-172.0, -34.0),
-					"label_position": p2_position + Vector2(-220.0, -40.0),
+					"guide_start": p2_position + Vector2(8.0, -7.0),
+					"guide_end": p2_position + Vector2(142.0, -63.0),
+					"label_position": p2_position + Vector2(58.0, -92.0),
 				},
 			],
 		},

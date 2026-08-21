@@ -76,13 +76,17 @@ const _SEGMENT_POINTS := {
 	SEGMENT_MAIN_WEST: [Vector2(160.0, 360.0), SWITCH_POSITION],
 	SEGMENT_MAIN_EAST: [SWITCH_POSITION, Vector2(1320.0, 360.0)],
 	SEGMENT_SIDING_B: [
+		# P2 is a facing turnout from the eastbound main. The branch must
+		# continue generally east as it diverges north; a branch that turns
+		# immediately back west produces an impossible hairpin turnout.
 		Vector2(1320.0, 360.0),
-		Vector2(1288.0, 342.0),
-		Vector2(1236.0, 330.0),
-		Vector2(1160.0, 326.0),
-		Vector2(1060.0, 326.0),
-		Vector2(970.0, 338.0),
-		Vector2(900.0, 356.0),
+		Vector2(1360.0, 358.0),
+		Vector2(1405.0, 352.0),
+		Vector2(1450.0, 340.0),
+		Vector2(1495.0, 324.0),
+		Vector2(1540.0, 304.0),
+		Vector2(1590.0, 282.0),
+		Vector2(1640.0, 260.0),
 	],
 	SEGMENT_SIDING: [
 		SWITCH_POSITION,
@@ -103,6 +107,12 @@ var yard_point_routes: Dictionary = {
 	"P2": POINTS_MAIN,
 	"P3": POINTS_SIDING,
 }
+# While a consist straddles a turnout after a trailing/reverse move, rendering
+# must use the branch the consist actually traversed. The live switch route is
+# only authority for a NEW facing move; it must not teleport vehicles already
+# occupying the previous branch.
+var traversal_next_override_from: String = ""
+var traversal_next_override_to: String = ""
 var brake_active: bool = false
 var blocked_reason: String = ""
 var condition_state: String = CONDITION_OPERATIONAL
@@ -397,6 +407,7 @@ func select_powered_control(unit_id: String) -> bool:
 
 	var target_units := _get_detached_units(target_consist)
 	active_units = target_units
+	_clear_traversal_next_override()
 	current_segment = _get_detached_segment(target_consist)
 	var target_front_distance := _get_detached_front_coupler_distance(target_consist)
 	distance = target_front_distance
@@ -923,6 +934,8 @@ func _advance(amount: float) -> void:
 		else:
 			remaining = _advance_toward_segment_start(remaining)
 
+	_clear_traversal_override_if_consist_clear()
+
 
 func _advance_toward_segment_end(amount: float) -> float:
 	var contact := _find_contact_for_amount(amount)
@@ -967,53 +980,75 @@ func _advance_toward_segment_start(amount: float) -> float:
 
 
 func _leave_endpoint_b() -> bool:
+	# Forward travel from a common leg follows the stored traversed branch while
+	# the consist is still straddling a turnout. Otherwise the live points route
+	# decides the next segment for a new facing move.
+	var next_segment := _get_next_segment(current_segment)
+	if next_segment != "":
+		current_segment = next_segment
+		distance = 0.0
+		return true
+
 	match current_segment:
-		SEGMENT_MAIN_WEST:
-			if points_route == POINTS_SIDING:
-				current_segment = SEGMENT_SIDING
-			else:
-				current_segment = SEGMENT_MAIN_EAST
-			distance = 0.0
-			return true
 		SEGMENT_MAIN_EAST:
-			if get_yard_point_route("P2") == POINTS_SIDING:
-				current_segment = SEGMENT_SIDING_B
-				distance = 0.0
-				return true
 			blocked_reason = "End of main line"
-			return false
 		SEGMENT_SIDING_B:
 			blocked_reason = "End of workshop siding"
-			return false
 		SEGMENT_SIDING:
 			blocked_reason = "End of siding"
-			return false
-
+		SEGMENT_MAIN_WEST:
+			blocked_reason = "No route through points"
 	return false
 
 
 func _leave_endpoint_a() -> bool:
-	match current_segment:
-		SEGMENT_MAIN_WEST:
-			blocked_reason = "End of main line"
-			return false
-		SEGMENT_MAIN_EAST:
-			current_segment = SEGMENT_MAIN_WEST
-			distance = get_segment_length(SEGMENT_MAIN_WEST) + _get_active_consist_length()
-			return true
-		SEGMENT_SIDING_B:
-			if get_yard_point_route("P2") != POINTS_SIDING:
+	var source_segment := current_segment
+	var previous_segment := _get_previous_segment(source_segment)
+	if previous_segment == "":
+		match source_segment:
+			SEGMENT_MAIN_WEST:
+				blocked_reason = "End of main line"
+			SEGMENT_SIDING_B:
 				blocked_reason = "P2 set straight"
-				return false
-			current_segment = SEGMENT_MAIN_EAST
-			distance = get_segment_length(SEGMENT_MAIN_EAST) + _get_active_consist_length()
-			return true
-		SEGMENT_SIDING:
-			current_segment = SEGMENT_MAIN_WEST
-			distance = get_segment_length(SEGMENT_MAIN_WEST) + _get_active_consist_length()
-			return true
+			_:
+				blocked_reason = "No route through points"
+		return false
 
-	return false
+	# We are performing a trailing/reverse traversal onto the common segment.
+	# Preserve the segment the train came from until the ENTIRE consist clears
+	# the turnout. This prevents a live switch route from re-routing draw states
+	# for vehicles that are already physically on the old branch.
+	_set_traversal_next_override(previous_segment, source_segment)
+	current_segment = previous_segment
+	distance = get_segment_length(previous_segment) + _get_active_consist_length()
+	return true
+
+
+func _set_traversal_next_override(from_segment: String, to_segment: String) -> void:
+	traversal_next_override_from = from_segment
+	traversal_next_override_to = to_segment
+
+
+func _clear_traversal_next_override() -> void:
+	traversal_next_override_from = ""
+	traversal_next_override_to = ""
+
+
+func _clear_traversal_override_if_consist_clear() -> void:
+	if traversal_next_override_from == "" or traversal_next_override_to == "":
+		return
+
+	# If the active reference has moved away from the common segment then the
+	# straddling transition has been resolved by movement back onto the branch.
+	if current_segment != traversal_next_override_from:
+		_clear_traversal_next_override()
+		return
+
+	# distance is the active consist front coupler. Once it is no longer beyond
+	# the common segment end, every vehicle centre/rear is also clear of the
+	# turnout and normal live points routing can resume.
+	if distance <= get_segment_length(current_segment) + CONTACT_EPSILON:
+		_clear_traversal_next_override()
 
 
 func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dictionary:
@@ -1057,6 +1092,9 @@ func _get_previous_segment(segment_id: String) -> String:
 
 
 func _get_next_segment(segment_id: String) -> String:
+	if segment_id == traversal_next_override_from and traversal_next_override_to != "":
+		return traversal_next_override_to
+
 	match segment_id:
 		SEGMENT_MAIN_WEST:
 			if points_route == POINTS_SIDING:

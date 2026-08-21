@@ -22,7 +22,7 @@ const POINT_P2_ANCHOR := Vector2(1300.0, 332.0)
 const POINT_P3_ANCHOR := Vector2(930.0, 550.0)
 const YARD_CONTROL_REPAIR_ANCHOR := Vector2(365.0, 585.0)
 const YARD_POWER_ANCHOR := Vector2(420.0, 585.0)
-const SHUNTER_REPAIR_ANCHOR := Vector2(1088.0, 288.0)
+const SHUNTER_REPAIR_ANCHOR := Vector2(1550.0, 252.0)
 
 var rail: RefCounted
 var yard_control_condition: String = CONTROL_DAMAGED
