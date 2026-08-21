@@ -1,0 +1,178 @@
+--- a/scripts/rail/rail_movement.gd
++++ b/scripts/rail/rail_movement.gd
+@@ -76,13 +76,17 @@
+ 	SEGMENT_MAIN_WEST: [Vector2(160.0, 360.0), SWITCH_POSITION],
+ 	SEGMENT_MAIN_EAST: [SWITCH_POSITION, Vector2(1320.0, 360.0)],
+ 	SEGMENT_SIDING_B: [
++		# P2 is a facing turnout from the eastbound main. The branch must
++		# initially continue in the same general direction as MAIN_EAST, then
++		# curve north. Do not fold the branch back across the turnout.
+ 		Vector2(1320.0, 360.0),
+-		Vector2(1288.0, 342.0),
+-		Vector2(1236.0, 330.0),
+-		Vector2(1160.0, 326.0),
+-		Vector2(1060.0, 326.0),
+-		Vector2(970.0, 338.0),
+-		Vector2(900.0, 356.0),
++		Vector2(1360.0, 358.0),
++		Vector2(1405.0, 352.0),
++		Vector2(1450.0, 340.0),
++		Vector2(1495.0, 324.0),
++		Vector2(1540.0, 304.0),
++		Vector2(1590.0, 282.0),
++		Vector2(1640.0, 260.0),
+ 	],
+ 	SEGMENT_SIDING: [
+ 		SWITCH_POSITION,
+@@ -103,6 +107,12 @@
+ 	"P2": POINTS_MAIN,
+ 	"P3": POINTS_SIDING,
+ }
++# When reversing through the common end of a turnout, the active consist can
++# temporarily straddle the segment boundary. During that window, rendering and
++# coupler placement must follow the branch the train actually came from, not the
++# switch's current forward-facing route.
++var traversal_next_override_from: String = ""
++var traversal_next_override_to: String = ""
+ var brake_active: bool = false
+ var blocked_reason: String = ""
+ var condition_state: String = CONDITION_OPERATIONAL
+@@ -397,6 +407,7 @@
+ 
+ 	var target_units := _get_detached_units(target_consist)
+ 	active_units = target_units
++	_clear_traversal_next_override()
+ 	current_segment = _get_detached_segment(target_consist)
+ 	var target_front_distance := _get_detached_front_coupler_distance(target_consist)
+ 	distance = target_front_distance
+@@ -923,6 +934,8 @@
+ 		else:
+ 			remaining = _advance_toward_segment_start(remaining)
+ 
++	_clear_traversal_override_if_consist_clear()
++
+ 
+ func _advance_toward_segment_end(amount: float) -> float:
+ 	var contact := _find_contact_for_amount(amount)
+@@ -998,6 +1011,11 @@
+ 			blocked_reason = "End of main line"
+ 			return false
+ 		SEGMENT_MAIN_EAST:
++			# The consist is reversing through P1 from MAIN_EAST onto the common
++			# MAIN_WEST leg. While it still straddles P1, remember that its
++			# trailing portion came from MAIN_EAST even if P1 is currently set
++			# toward SIDING for future facing moves.
++			_set_traversal_next_override(SEGMENT_MAIN_WEST, SEGMENT_MAIN_EAST)
+ 			current_segment = SEGMENT_MAIN_WEST
+ 			distance = get_segment_length(SEGMENT_MAIN_WEST) + _get_active_consist_length()
+ 			return true
+@@ -1005,10 +1023,15 @@
+ 			if get_yard_point_route("P2") != POINTS_SIDING:
+ 				blocked_reason = "P2 set straight"
+ 				return false
++			# Same rule at P2: once the shunter/train is physically reversing
++			# from the workshop branch, the portion still beyond the turnout must
++			# remain on SIDING_B until the whole consist clears.
++			_set_traversal_next_override(SEGMENT_MAIN_EAST, SEGMENT_SIDING_B)
+ 			current_segment = SEGMENT_MAIN_EAST
+ 			distance = get_segment_length(SEGMENT_MAIN_EAST) + _get_active_consist_length()
+ 			return true
+ 		SEGMENT_SIDING:
++			_set_traversal_next_override(SEGMENT_MAIN_WEST, SEGMENT_SIDING)
+ 			current_segment = SEGMENT_MAIN_WEST
+ 			distance = get_segment_length(SEGMENT_MAIN_WEST) + _get_active_consist_length()
+ 			return true
+@@ -1016,6 +1039,26 @@
+ 	return false
+ 
+ 
++func _set_traversal_next_override(from_segment: String, to_segment: String) -> void:
++	traversal_next_override_from = from_segment
++	traversal_next_override_to = to_segment
++
++
++func _clear_traversal_next_override() -> void:
++	traversal_next_override_from = ""
++	traversal_next_override_to = ""
++
++
++func _clear_traversal_override_if_consist_clear() -> void:
++	if traversal_next_override_from == "" or traversal_next_override_to == "":
++		return
++	if current_segment != traversal_next_override_from:
++		_clear_traversal_next_override()
++		return
++	if distance <= get_segment_length(current_segment) + CONTACT_EPSILON:
++		_clear_traversal_next_override()
++
++
+ func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dictionary:
+ 	var resolved_segment := segment_id
+ 	var resolved_distance := segment_distance
+@@ -1057,6 +1100,9 @@
+ 
+ 
+ func _get_next_segment(segment_id: String) -> String:
++	if segment_id == traversal_next_override_from and traversal_next_override_to != "":
++		return traversal_next_override_to
++
+ 	match segment_id:
+ 		SEGMENT_MAIN_WEST:
+ 			if points_route == POINTS_SIDING:
+--- a/tests/sprint2_orientation_acceptance.gd
++++ b/tests/sprint2_orientation_acceptance.gd
+@@ -11,6 +11,7 @@
+ 	_diverging_siding_has_nonzero_local_tangent()
+ 	_consist_spanning_switch_uses_per_unit_angles()
+ 	_reverse_direction_does_not_flip_physical_unit_orientation()
++	_reverse_trailing_move_uses_traversed_branch_not_current_switch_route()
+ 	_visual_orientation_queries_do_not_change_contact_results()
+ 
+ 	_finish()
+@@ -81,6 +82,33 @@
+ 		_expect(is_equal_approx(float(forward_l["angle"]), float(reverse_l["angle"])), "reverse travel preserves physical orientation from track tangent")
+ 
+ 
++func _reverse_trailing_move_uses_traversed_branch_not_current_switch_route() -> void:
++	var sim = RailMovement.new()
++	sim.active_units = _typed_units(["L", "A", "B"])
++	var detached_consists: Array[Dictionary] = []
++	sim.detached_consists = detached_consists
++	sim.current_segment = RailMovement.SEGMENT_MAIN_EAST
++	sim.distance = 1.0
++	sim.direction = -1
++	sim.speed = 8.0
++	sim.throttle = 1.0
++	sim.max_speed = 8.0
++	sim.acceleration = 0.0
++	sim.coast_deceleration = 0.0
++
++	# P1 is deliberately set toward SIDING for a future facing move. A train
++	# already reversing from MAIN_EAST must still keep its trailing bodies on
++	# MAIN_EAST while it clears the turnout; it must not visually jump to SIDING.
++	sim.set_points_route(RailMovement.POINTS_SIDING)
++	sim.step(0.25, false)
++
++	_expect(sim.current_segment == RailMovement.SEGMENT_MAIN_WEST, "reverse trailing move enters the common P1 leg")
++	var states := _active_states(sim.get_unit_draw_states())
++	var occupied_segments := _state_segments(states)
++	_expect(occupied_segments.has(RailMovement.SEGMENT_MAIN_EAST), "straddling consist keeps trailing bodies on the segment it actually came from")
++	_expect(not occupied_segments.has(RailMovement.SEGMENT_SIDING), "reverse trailing move does not jump onto P1's currently selected facing branch")
++
++
+ func _visual_orientation_queries_do_not_change_contact_results() -> void:
+ 	var sim := _make_contact_fixture(["L"], ["A"], 240.0, 300.0, 8.0, 1)
+ 	var before_interval: Dictionary = sim.get_active_occupied_interval()
+--- a/tests/sprint4_visual_guidance.gd
++++ b/tests/sprint4_visual_guidance.gd
+@@ -73,6 +73,10 @@
+ 	var route_segment: Array = scene.rail.get_track_segments()[RailMovement.SEGMENT_SIDING_B]
+ 	_expect(route_segment.size() >= 6, "workshop siding uses enough rail points for a readable bend")
+ 	_expect(_max_turn_delta(route_segment) <= 0.55, "workshop siding avoids abrupt unrealistic angle changes")
++	var main_segment: Array = scene.rail.get_track_segments()[RailMovement.SEGMENT_MAIN_EAST]
++	var main_tangent := ((main_segment[main_segment.size() - 1] as Vector2) - (main_segment[main_segment.size() - 2] as Vector2)).normalized()
++	var branch_tangent := ((route_segment[1] as Vector2) - (route_segment[0] as Vector2)).normalized()
++	_expect(absf(angle_difference(main_tangent.angle(), branch_tangent.angle())) <= 0.45, "P2 branch leaves the main as a plausible facing turnout rather than folding back on itself")
+ 	_expect((route_segment[0] as Vector2).distance_to(p2_branch_position) <= 1.0, "P2 controlled branch begins at the P2 turnout")
+ 	_expect(_points_bounds(route_segment).position.y < p2_branch_position.y - 20.0, "P2 controlled branch is the visible north branch")
+ 	var bounds: Rect2 = scene.get_world_bounds()
