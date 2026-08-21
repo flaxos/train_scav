@@ -14,6 +14,7 @@ const COUPLER_GAP := 8.0
 const COUPLING_RANGE := 24.0
 const DEFAULT_SAFE_CONTACT_SPEED := 14.0
 const SWITCH_OCCUPANCY_CLEARANCE := 42.0
+const TRAILING_ROUTE_STOP_CLEARANCE := SWITCH_OCCUPANCY_CLEARANCE + 2.0
 const SWITCH_OPERATOR_ANCHOR_OFFSET := Vector2(-28.0, -58.0)
 const JOINT_OPERATOR_ANCHOR_OFFSET := 42.0
 const CONTACT_NONE := "none"
@@ -107,12 +108,10 @@ var yard_point_routes: Dictionary = {
 	"P2": POINTS_MAIN,
 	"P3": POINTS_SIDING,
 }
-# While a consist straddles a turnout after a trailing/reverse move, rendering
-# must use the branch the consist actually traversed. The live switch route is
-# only authority for a NEW facing move; it must not teleport vehicles already
-# occupying the previous branch.
-var traversal_next_override_from: String = ""
-var traversal_next_override_to: String = ""
+# Track routing is directional: facing moves from a common leg consult the
+# switch setting, while reverse/trailing moves follow the segment's structural
+# connection back to its common leg. A live switch setting must never rewrite
+# the path already occupied by rolling stock.
 var brake_active: bool = false
 var blocked_reason: String = ""
 var condition_state: String = CONDITION_OPERATIONAL
@@ -407,7 +406,6 @@ func select_powered_control(unit_id: String) -> bool:
 
 	var target_units := _get_detached_units(target_consist)
 	active_units = target_units
-	_clear_traversal_next_override()
 	current_segment = _get_detached_segment(target_consist)
 	var target_front_distance := _get_detached_front_coupler_distance(target_consist)
 	distance = target_front_distance
@@ -714,9 +712,10 @@ func get_last_contact_anchor() -> Dictionary:
 	var consist := detached_consists[target_index]
 	var active_end := str(target_info["active_end"])
 	var detached_end := str(target_info["detached_end"])
-	var active_coupler := _get_active_coupler_distance(active_end)
-	var detached_coupler := _get_detached_coupler_distance(consist, detached_end)
-	var contact_distance := (active_coupler + detached_coupler) * 0.5
+	# `contact_distance` is already projected into the active segment's path
+	# coordinates. Using the detached consist's raw local distance here breaks
+	# crew coupling when the two exposed couplers meet exactly across a turnout.
+	var contact_distance := float(target_info["contact_distance"])
 	var rail_position := _resolve_path_distance(current_segment, contact_distance)
 	var segment_id := str(rail_position["segment"])
 	var segment_distance := float(rail_position["distance"])
@@ -765,10 +764,17 @@ func couple_nearest() -> bool:
 		for unit_id in units:
 			next_units.append(unit_id)
 	elif active_end == COUPLER_FRONT and detached_end == COUPLER_REAR:
+		# The contacted consist becomes the new physical front. If the contact
+		# occurred across a turnout, its front coupler is expressed in the target
+		# segment's local coordinates, so transfer the active reference segment as
+		# well as the distance. Previously only `distance` changed, which made
+		# cross-segment front coupling either unavailable or geometrically invalid.
+		var next_front_segment := _get_detached_segment(consist)
 		var next_front_distance := _get_detached_front_coupler_distance(consist)
 		next_units.assign(units)
 		for unit_id in active_units:
 			next_units.append(unit_id)
+		current_segment = next_front_segment
 		distance = next_front_distance
 	else:
 		blocked_reason = "Coupler endpoints are not compatible"
@@ -934,8 +940,6 @@ func _advance(amount: float) -> void:
 		else:
 			remaining = _advance_toward_segment_start(remaining)
 
-	_clear_traversal_override_if_consist_clear()
-
 
 func _advance_toward_segment_end(amount: float) -> float:
 	var contact := _find_contact_for_amount(amount)
@@ -959,13 +963,48 @@ func _advance_toward_segment_end(amount: float) -> float:
 
 
 func _advance_toward_segment_start(amount: float) -> float:
+	# A trailing/reverse move must still have the turnout aligned for the branch
+	# the consist is physically leaving. The old reverse fix treated every branch
+	# as structurally passable regardless of point state, which removed the visual
+	# teleport but broke Sprint 4's yard rule: P2 straight must block a shunter
+	# from trailing out of the workshop siding.
+	#
+	# Stop when the ACTIVE REAR coupler reaches the turnout. This is important:
+	# waiting until the front reference reaches segment distance 0 would allow a
+	# long consist to render through the wrong branch before the route is rejected.
+	var travel := absf(amount)
+	var rear_distance := _get_active_rear_coupler_distance()
+	if _has_structural_previous_segment(current_segment) and not _is_trailing_route_aligned(current_segment):
+		# Stop slightly CLEAR of the turnout rather than directly on the switch.
+		# That keeps the occupancy interlock free so the player can throw the points
+		# after receiving the route-block message instead of having to move away first.
+		var travel_to_route_stop := rear_distance - TRAILING_ROUTE_STOP_CLEARANCE
+		if travel_to_route_stop <= CONTACT_EPSILON:
+			speed = 0.0
+			blocked_reason = _get_trailing_route_block_reason(current_segment)
+			return 0.0
+
+		if travel >= travel_to_route_stop - CONTACT_EPSILON:
+			# Same-segment rolling stock may be closer than the turnout barrier, so let
+			# normal contact resolution win when appropriate. Cross-boundary contact
+			# projection is disabled while the turnout is misaligned.
+			var contact_before_points := _find_contact_for_amount(-travel_to_route_stop)
+			if not contact_before_points.is_empty():
+				distance += float(contact_before_points["travel"])
+				_register_contact(contact_before_points)
+				return 0.0
+
+			distance -= travel_to_route_stop
+			speed = 0.0
+			blocked_reason = _get_trailing_route_block_reason(current_segment)
+			return 0.0
+
 	var contact := _find_contact_for_amount(amount)
 	if not contact.is_empty():
 		distance += float(contact["travel"])
 		_register_contact(contact)
 		return 0.0
 
-	var travel := absf(amount)
 	if travel <= distance:
 		distance -= travel
 		return 0.0
@@ -1008,47 +1047,22 @@ func _leave_endpoint_a() -> bool:
 		match source_segment:
 			SEGMENT_MAIN_WEST:
 				blocked_reason = "End of main line"
-			SEGMENT_SIDING_B:
-				blocked_reason = "P2 set straight"
 			_:
 				blocked_reason = "No route through points"
 		return false
 
-	# We are performing a trailing/reverse traversal onto the common segment.
-	# Preserve the segment the train came from until the ENTIRE consist clears
-	# the turnout. This prevents a live switch route from re-routing draw states
-	# for vehicles that are already physically on the old branch.
-	_set_traversal_next_override(previous_segment, source_segment)
+	# `distance` is the active consist FRONT coupler measured along
+	# `current_segment`. During reverse travel the rear of the consist crosses
+	# endpoint A first; `_resolve_path_distance()` already places those negative
+	# offsets onto the structurally connected previous segment. By the time the
+	# front coupler itself reaches endpoint A the ENTIRE consist has cleared the
+	# source segment. Therefore the equivalent coordinate on the previous segment
+	# is exactly its endpoint B -- do not add consist length here. Adding consist
+	# length re-projects the train back onto the branch and causes the visible
+	# reverse-turnout teleport.
 	current_segment = previous_segment
-	distance = get_segment_length(previous_segment) + _get_active_consist_length()
+	distance = get_segment_length(previous_segment)
 	return true
-
-
-func _set_traversal_next_override(from_segment: String, to_segment: String) -> void:
-	traversal_next_override_from = from_segment
-	traversal_next_override_to = to_segment
-
-
-func _clear_traversal_next_override() -> void:
-	traversal_next_override_from = ""
-	traversal_next_override_to = ""
-
-
-func _clear_traversal_override_if_consist_clear() -> void:
-	if traversal_next_override_from == "" or traversal_next_override_to == "":
-		return
-
-	# If the active reference has moved away from the common segment then the
-	# straddling transition has been resolved by movement back onto the branch.
-	if current_segment != traversal_next_override_from:
-		_clear_traversal_next_override()
-		return
-
-	# distance is the active consist front coupler. Once it is no longer beyond
-	# the common segment end, every vehicle centre/rear is also clear of the
-	# turnout and normal live points routing can resume.
-	if distance <= get_segment_length(current_segment) + CONTACT_EPSILON:
-		_clear_traversal_next_override()
 
 
 func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dictionary:
@@ -1080,21 +1094,52 @@ func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dict
 	}
 
 
+func _has_structural_previous_segment(segment_id: String) -> bool:
+	return _get_previous_segment(segment_id) != ""
+
+
+func _is_trailing_route_aligned(segment_id: String) -> bool:
+	# Facing and trailing moves use the same physical point alignment. A branch
+	# already occupied by a train does not magically become the selected branch;
+	# if the points are against the movement, the train stops at the turnout.
+	match segment_id:
+		SEGMENT_MAIN_EAST:
+			return points_route == POINTS_MAIN
+		SEGMENT_SIDING:
+			return points_route == POINTS_SIDING
+		SEGMENT_SIDING_B:
+			return get_yard_point_route("P2") == POINTS_SIDING
+	return true
+
+
+func _get_trailing_route_block_reason(segment_id: String) -> String:
+	match segment_id:
+		SEGMENT_MAIN_EAST:
+			return "P1 route blocks main line"
+		SEGMENT_SIDING:
+			return "P1 route blocks siding"
+		SEGMENT_SIDING_B:
+			return "P2 route blocks workshop siding"
+	return "No route through points"
+
+
 func _get_previous_segment(segment_id: String) -> String:
+	# Structural topology only. Route alignment is deliberately checked by the
+	# movement layer at the moment the trailing/rear coupler reaches the turnout.
+	# Keeping topology separate avoids using the live switch setting to redraw a
+	# consist that is already straddling an aligned turnout.
 	match segment_id:
 		SEGMENT_MAIN_EAST, SEGMENT_SIDING:
 			return SEGMENT_MAIN_WEST
 		SEGMENT_SIDING_B:
-			if get_yard_point_route("P2") == POINTS_SIDING:
-				return SEGMENT_MAIN_EAST
-			return ""
+			return SEGMENT_MAIN_EAST
 	return ""
 
 
 func _get_next_segment(segment_id: String) -> String:
-	if segment_id == traversal_next_override_from and traversal_next_override_to != "":
-		return traversal_next_override_to
-
+	# Facing movement from a common leg is the only place where the live switch
+	# route chooses a branch. Reverse/trailing continuity is handled by
+	# `_get_previous_segment()`.
 	match segment_id:
 		SEGMENT_MAIN_WEST:
 			if points_route == POINTS_SIDING:
@@ -1238,8 +1283,8 @@ func _find_contact_for_amount(amount: float) -> Dictionary:
 		var desired_front := current_front + amount
 		for index in detached_consists.size():
 			var consist := detached_consists[index]
-			var detached_interval := _get_detached_interval(consist)
-			if str(detached_interval["segment"]) != current_segment:
+			var detached_interval := _project_detached_interval_for_motion(_get_detached_interval(consist), amount)
+			if detached_interval.is_empty():
 				continue
 
 			var target_rear := float(detached_interval["rear"])
@@ -1260,8 +1305,8 @@ func _find_contact_for_amount(amount: float) -> Dictionary:
 		var desired_rear := current_rear + amount
 		for index in detached_consists.size():
 			var consist := detached_consists[index]
-			var detached_interval := _get_detached_interval(consist)
-			if str(detached_interval["segment"]) != current_segment:
+			var detached_interval := _project_detached_interval_for_motion(_get_detached_interval(consist), amount)
+			if detached_interval.is_empty():
 				continue
 
 			var target_front := float(detached_interval["front"])
@@ -1280,6 +1325,50 @@ func _find_contact_for_amount(amount: float) -> Dictionary:
 			nearest = _make_contact_candidate(index, travel, COUPLER_REAR, active_units[active_units.size() - 1], COUPLER_FRONT, units[0])
 
 	return nearest
+
+
+func _project_detached_interval_for_motion(detached_interval: Dictionary, amount: float) -> Dictionary:
+	# Contact distances are compared in the active segment's local coordinate
+	# system. Adjacent connected segments are projected across the turnout so a
+	# leading coupler can detect rolling stock BEFORE the active reference point
+	# itself changes segments. This is essential in reverse because the rear
+	# coupler leads and may cross endpoint A while the front coupler is still on
+	# the source segment.
+	var detached_segment := str(detached_interval.get("segment", ""))
+	if detached_segment == current_segment:
+		return detached_interval.duplicate(true)
+
+	if amount < 0.0:
+		# Do not detect rolling stock through a turnout that is physically aligned
+		# against this trailing movement. The route barrier is resolved before the
+		# active rear coupler enters the adjacent segment.
+		if _get_active_rear_coupler_distance() >= -CONTACT_EPSILON and not _is_trailing_route_aligned(current_segment):
+			return {}
+
+		var previous_segment := _get_previous_segment(current_segment)
+		if previous_segment == "" or detached_segment != previous_segment:
+			return {}
+
+		var previous_length := get_segment_length(previous_segment)
+		return {
+			"segment": detached_segment,
+			"rear": float(detached_interval["rear"]) - previous_length,
+			"front": float(detached_interval["front"]) - previous_length,
+		}
+
+	if amount > 0.0:
+		var next_segment := _get_next_segment(current_segment)
+		if next_segment == "" or detached_segment != next_segment:
+			return {}
+
+		var current_length := get_segment_length(current_segment)
+		return {
+			"segment": detached_segment,
+			"rear": current_length + float(detached_interval["rear"]),
+			"front": current_length + float(detached_interval["front"]),
+		}
+
+	return {}
 
 
 func _make_contact_candidate(index: int, travel: float, active_end: String, active_unit: String, detached_end: String, detached_unit: String) -> Dictionary:
@@ -1338,9 +1427,6 @@ func _find_contact_coupling_target_info(unit_id: String = "") -> Dictionary:
 		return {}
 
 	var consist := detached_consists[target_index]
-	if _get_detached_segment(consist) != current_segment:
-		return {}
-
 	var units := _get_detached_units(consist)
 	if units.is_empty():
 		return {}
@@ -1363,8 +1449,30 @@ func _find_contact_coupling_target_info(unit_id: String = "") -> Dictionary:
 	if str(last_contact.get("segment", "")) != current_segment:
 		return {}
 
+	# Contact detection already supports an exposed coupler meeting rolling stock
+	# on the structurally adjacent segment across an aligned turnout. Coupling must
+	# validate in the SAME projected path coordinate system; comparing the raw
+	# segment-local distances incorrectly rejects legitimate cross-turnout contacts.
+	var motion_sign := 1.0
+	if active_end == COUPLER_REAR:
+		motion_sign = -1.0
+
+	var projected_interval := _project_detached_interval_for_motion(
+		_get_detached_interval(consist),
+		motion_sign
+	)
+	if projected_interval.is_empty():
+		return {}
+
 	var active_coupler := _get_active_coupler_distance(active_end)
-	var target_coupler := _get_detached_coupler_distance(consist, detached_end)
+	var target_coupler := 0.0
+	if detached_end == COUPLER_FRONT:
+		target_coupler = float(projected_interval["front"])
+	elif detached_end == COUPLER_REAR:
+		target_coupler = float(projected_interval["rear"])
+	else:
+		return {}
+
 	var coupler_distance := absf(active_coupler - target_coupler)
 	if coupler_distance > CONTACT_EPSILON:
 		return {}
@@ -1377,6 +1485,8 @@ func _find_contact_coupling_target_info(unit_id: String = "") -> Dictionary:
 		"unit": detached_unit,
 		"distance": coupler_distance,
 		"segment": current_segment,
+		"target_segment": _get_detached_segment(consist),
+		"contact_distance": (active_coupler + target_coupler) * 0.5,
 	}
 
 

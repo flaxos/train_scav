@@ -94,7 +94,11 @@ func _reverse_segment_entry_contact_prevents_cross_boundary_overlap() -> void:
 	]
 	sim.detached_consists = detached_consists
 	sim.current_segment = RailMovement.SEGMENT_MAIN_EAST
-	sim.distance = 10.0
+	# Keep the shunter fully on MAIN_EAST at fixture start. Its rear coupler is
+	# 12 units from P1, so this step must detect the parked locomotive exactly
+	# at the cross-segment boundary before any overlap occurs.
+	sim.distance = sim.get_unit_length("S") + 12.0
+	sim.set_points_route(RailMovement.POINTS_MAIN)
 	sim.direction = -1
 	sim.speed = sim.safe_contact_speed * 2.0
 	sim.throttle = 1.0
@@ -107,7 +111,9 @@ func _reverse_segment_entry_contact_prevents_cross_boundary_overlap() -> void:
 	sim.step(1.0, false)
 
 	var contact: Dictionary = sim.get_last_contact()
-	_expect(not sim.has_any_overlap(), "reverse entry from P2/main detects parked rolling stock before overlap")
+	_expect(not sim.has_any_overlap(), "reverse entry from P1/main detects parked rolling stock before overlap")
+	_expect(is_equal_approx(sim.distance, sim.get_unit_length("S")), "reverse contact stops with shunter rear coupler exactly at P1 boundary")
+	_expect(sim.points_route == RailMovement.POINTS_MAIN, "reverse cross-boundary contact uses an aligned P1 route")
 	_expect(not contact.is_empty(), "reverse cross-boundary contact is registered")
 	_expect(contact.get("active_unit", "") == "S", "reverse contact records moving shunter")
 	_expect(contact.get("detached_unit", "") == "L", "reverse contact records parked main locomotive")
