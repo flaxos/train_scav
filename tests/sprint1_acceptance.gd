@@ -69,4 +69,5 @@ func _debug_has_required_state(sim: RefCounted) -> bool:
 		and debug_text.contains("Speed:") \
 		and debug_text.contains("Direction:") \
 		and debug_text.contains("Throttle:") \
+		and debug_text.contains("Brake:") \
 		and debug_text.contains("Points:")

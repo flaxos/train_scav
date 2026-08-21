@@ -70,7 +70,7 @@ Build:
 - test yard.
 
 Acceptance:
-> Starting with `[L][A][B]` and `[C]` on a siding, the player can physically produce `[L][A][C][B]` using rail movement, points, coupling and decoupling with no teleport/reorder command.
+> Starting with `[L][A][B]` and `[C]` on a siding, the player can physically recover `C` using rail movement, points, coupling and decoupling with no teleport/reorder command; the resulting consist order follows the exposed couplers that actually touched.
 
 **POC GO/NO-GO GATE:** If this is not enjoyable or understandable, improve the interaction before adding colony systems.
 
@@ -92,10 +92,10 @@ Acceptance:
 ### Sprint 4 — Railway operations systems
 **Hypothesis:** Multiple systemic solutions make yards interesting rather than repetitive.
 
-Build a hand-authored yard supporting at least three approaches:
+Build a hand-authored yard supporting at least two approaches:
 - manual points;
 - repair/use local shunter OR temporary secondary locomotive;
-- power/repair yard control for remote points.
+- repair/power yard control as infrastructure state, with remote switching parked until the crew-operated UAT is clearer.
 
 Potential supporting systems:
 - damaged/offline points state;

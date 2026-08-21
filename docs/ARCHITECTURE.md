@@ -131,6 +131,8 @@ Avoid unconstrained rigid-body train physics as the authoritative movement model
 
 Visual/secondary physics effects can be added later if needed.
 
+Rail rendering must consume rail-space transform data from the rail model. Each rolling-stock unit derives its visual position and rotation from its own segment/distance and the local tangent sampled at that point. A consist spanning a switch may therefore render different vehicles at different angles; it must not apply one global consist or locomotive rotation to every vehicle.
+
 ## Coupler model — POC
 
 A coupler needs enough state to determine:
@@ -143,9 +145,17 @@ A coupler needs enough state to determine:
 
 For Sprint 2, physical interaction may be simplified to automatic coupling when compatible couplers are slowly aligned and the player confirms/commands coupling.
 
+Sprint 2 coupling candidates are created only by deterministic rail-space contact between exposed coupler endpoints. The contact event records the active consist endpoint, the target consist endpoint, rail segment/path, relative speed and whether coupling is permitted. Coupling must use that endpoint pair to derive the new physical consist order. It must not scan for any nearby detached wagon and append it to the active consist.
+
+Rolling stock contact is based on occupied intervals along the current rail segment/path. Vehicles on different switch branches or parallel/crossing rendered geometry are not considered in contact merely because their 2D drawings are close or overlapping.
+
 ## Train consist model
 
 A consist is an ordered connected chain of rolling stock.
+
+Physical consist order, rolling-stock identity and traction/control authority are separate concepts. A wagon at the front of the physical order remains a wagon, and the controlled locomotive remains the locomotive entity identified by the simulation. Sprint 2 uses one controlled locomotive, `L`; later multi-locomotive gameplay must extend this explicitly rather than inferring authority from `consist[0]`, `consist.back()` or travel direction.
+
+Sprint 2 exposes simple rear and front outer-end decoupling commands. A split keeps the active controlled consist as the physical segment containing `controlled_locomotive_id`; commands that would detach the controlled locomotive or leave a wagon as the active powered unit are rejected.
 
 Required operations eventually include:
 - inspect ordered units;
@@ -166,6 +176,31 @@ Later prototype requirement:
 - navigate to local rail infrastructure.
 
 Do not build deep character AI before rail operation is proven.
+
+Sprint 3 introduces a deliberately small crew simulation. Survivors have persistent identity, a spatial state of aboard or yard, a current position, selection state and one active task. Aboard survivor transforms are derived from the host rolling-stock draw transform, so a person aboard a moving or rotating wagon follows that wagon instead of floating in world space.
+
+Crew tasks are an orchestration layer over authoritative domain systems. A survivor task validates and reserves a physical target, moves the survivor to an explicit interaction anchor, waits through a short interaction and then calls the rail-domain API. Crew code must not splice consist arrays, change switch visuals independently or infer locomotive/control authority.
+
+Railway interactions expose physical anchors: the points operator anchor and exact coupled-joint anchors. Uncoupling tasks target an existing ordered joint such as `A/B`; the rail model performs the split and keeps the active controlled consist on the segment containing `controlled_locomotive_id`.
+
+## Railway operations systems
+
+Sprint 4 adds a small yard-operations domain around the existing rail and crew domains.
+
+Mechanical railway state and remote-control state are independent:
+- a point may be mechanically operational but local-only while yard control is offline;
+- remote commands require repaired yard control, connected power, remote-capable point hardware and an unoccupied switch zone when that feature is promoted;
+- power connection/loss changes remote capability but does not directly mutate physical routes.
+
+Current Sprint 4 UAT keeps P1/P2 local-only. Yard control and auxiliary power can be repaired/connected as infrastructure state, but remote point route changes are rejected and do not mutate rail routes. Future restored automation must still call the rail-domain point authority and retain occupancy safety.
+
+Multiple powered units may exist in one sector. Sprint 4 still supports only one independently controlled powered consist at a time. Control selection is explicit through `controlled_power_unit_id`; switching control between the main locomotive `L` and repaired shunter `S` never changes rolling-stock identity or physical consist order. Wagon-only consists remain passive and cannot become powered through array position.
+
+Playable powered control also requires crew presence. The selected powered unit can receive player throttle only when at least one survivor is aboard that locomotive/shunter; repairing a shunter is not enough by itself to make it drivable.
+
+Yard repair, power, coupling and uncoupling tasks remain crew orchestration. A survivor reserves an explicit anchor, walks there, interacts briefly and then calls the relevant yard or rail operation. Crew code does not splice consists, couple by visual proximity, repair rolling stock by visual proximity or change point graphics independently.
+
+Sprint 4 strategy success is state-based. The workshop wagon `W` is recovered only when it is physically reached and coupled through the existing rail/contact system; there are no strategy flags such as manual/shunter success.
 
 ## Task/job model
 

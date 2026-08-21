@@ -57,3 +57,23 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-014 — AI art is an offline tool pipeline
 **Decision:** Future generative art services produce source assets outside the runtime game. Godot consumes processed assets; the game does not depend on a live image-generation API.  
 **Reason:** Reproducibility, cost, latency, licensing review, consistency and runtime reliability.
+
+## D-015 — Endpoint-based coupling
+**Decision:** Coupling is valid only from a controlled rail-space contact event between two exposed, compatible coupler endpoints on the same reachable rail path. The contacted endpoints determine whether the target consist is prepended or appended.
+**Reason:** Physical shunting depends on the actual couplers that touched; nearby-wagon scanning or generic append operations break consist order, switch topology and future push/pull operations.
+
+## D-016 — Per-unit rail transforms and locomotive authority
+**Decision:** Each rolling-stock unit renders from its own rail-space position and local tangent. Physical consist order, rolling-stock identity and traction/control authority are separate; Sprint 2 control remains attached to locomotive `L` even if wagons sit ahead of it in the consist. Front/rear decoupling keeps the active controlled consist on the segment containing `L` and rejects commands that would promote a wagon to control.
+**Reason:** Switches and curved/diverging track require per-vehicle orientation, and shunting must never let a wagon inherit locomotive type or control authority from array position.
+
+## D-017 — Crew tasks orchestrate rail authority
+**Decision:** Sprint 3 crew tasks validate and reserve explicit physical interaction anchors, move a survivor there, then call the existing rail-domain operation. Points operation uses the rail points API; uncoupling targets a specific existing coupled joint and uses the rail joint-split API. Aboard survivor transforms derive from the host rolling-stock transform.
+**Reason:** Physical crew should deepen shunting without duplicating railway simulation, corrupting consist identity or bypassing rail-space authority.
+
+## D-018 — Railway operations are systemic world state
+**Decision:** Sprint 4 yard operations model mechanical point state, yard-control repair, abstract power and local shunter repair as independent world-object state. Current UAT points remain local-only: repaired/powered yard control does not grant remote switch throwing, and remote commands reject without mutating routes. Multiple powered units may exist, but the controlled powered unit is selected explicitly and never inferred from consist order.
+**Reason:** The same salvage objective should support manual and shunter solutions through interacting systems rather than scripted strategy branches or identity-changing shortcuts. Remote switching is promising, but it is parked until the physical crew-control model is easier to read and test.
+
+## D-019 — Crew presence gates playable railway operations
+**Decision:** In the playable scene, throttle control for a locomotive/shunter requires at least one survivor aboard that powered unit. Coupling and uncoupling are crew tasks against explicit contact/joint anchors; normal UI actions do not directly splice or append consists.
+**Reason:** The demo should prove Train Scav's core idea that railway operations are physical work done by people and rolling stock, not hidden keyboard shortcuts or proximity-based array mutations.

@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://c3bw2cynrfiyy"]
 
-[ext_resource type="Script" path="res://scripts/bootstrap/main.gd" id="1_pfqke"]
+[ext_resource type="Script" uid="uid://bijm5peyku1rr" path="res://scripts/bootstrap/main.gd" id="1_pfqke"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -11,15 +11,6 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_pfqke")
 
-[node name="Background" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.055, 0.062, 0.071, 1)
-
 [node name="InstructionLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
@@ -28,21 +19,21 @@ anchor_right = 1.0
 offset_left = 24.0
 offset_top = 18.0
 offset_right = -24.0
-offset_bottom = 82.0
+offset_bottom = 118.0
 grow_horizontal = 2
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 20
 text = "Train Scav - Sprint 1"
 
 [node name="DebugLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 3
+anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -300.0
+offset_left = -430.0
 offset_top = 18.0
 offset_right = -24.0
-offset_bottom = 220.0
+offset_bottom = 410.0
 grow_horizontal = 0
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 text = "Debug"

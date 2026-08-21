@@ -17,11 +17,14 @@ Nothing below may be implemented merely because it appears promising.
 - Hump yards.
 - Turntables.
 - Traversers.
+- Selected-point UI and richer multi-switch yard tooling beyond fixed prototype hotkeys.
 - More detailed braking systems.
 - Realistic gradient/adhesion simulation.
 - Weather-dependent traction.
 - Electronic/automatic couplers.
+- Richer survivor coupling UX beyond the current valid-contact crew task.
 - Dedicated remote-control shunting equipment.
+- Restored yard-control remote switch operation after physical crew operation and mouse-first UAT are easier to read.
 - Sophisticated signalling.
 - Player-built new railway track beyond limited repair/short reconstruction.
 
