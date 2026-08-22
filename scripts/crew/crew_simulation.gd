@@ -3,6 +3,7 @@ class_name CrewSimulation
 
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const TrainInterior := preload("res://scripts/colony/train_interior.gd")
+const SurvivorNeeds := preload("res://scripts/colony/survivor_needs.gd")
 
 const SPATIAL_ABOARD := "aboard"
 const SPATIAL_YARD := "yard"
@@ -39,6 +40,7 @@ const DEFAULT_ABOARD_LOCAL_OFFSET := Vector2(-10.0, 0.0)
 var rail: RefCounted
 var yard: RefCounted
 var interior: RefCounted
+var needs: RefCounted
 var survivors: Array[Dictionary] = []
 var selected_survivor_id: String = "marta"
 var reservations: Dictionary = {}
@@ -61,6 +63,7 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 		rail = rail_model
 	yard = yard_model
 	interior = TrainInterior.new(rail)
+	needs = SurvivorNeeds.new()
 
 	survivors = [
 		_make_survivor("marta", "Marta", "L", Vector2(-14.0, -5.0)),
@@ -69,6 +72,8 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 		_make_survivor("pavel", "Pavel", "A", Vector2(12.0, -5.0)),
 		_make_survivor("iris", "Iris", "L", Vector2(12.0, 5.0)),
 	]
+	for survivor in survivors:
+		needs.init_survivor(str(survivor["id"]))
 
 
 func get_survivor_ids() -> Array[String]:
@@ -118,19 +123,24 @@ func get_survivor_draw_states() -> Array[Dictionary]:
 		var position := _get_survivor_world_position(survivor)
 		var angle := _get_survivor_angle(survivor)
 		var task_target := _get_task_target_position(survivor)
+		var survivor_id := str(survivor["id"])
 		states.append({
-			"id": str(survivor["id"]),
+			"id": survivor_id,
 			"name": str(survivor["name"]),
 			"position": position,
 			"angle": angle,
 			"spatial_state": str(survivor["spatial_state"]),
 			"host_unit": str(survivor.get("host_unit", "")),
-			"selected": str(survivor["id"]) == selected_survivor_id,
+			"selected": survivor_id == selected_survivor_id,
 			"task_type": str(survivor["task_type"]),
 			"task_status": str(survivor["task_status"]),
 			"status_text": str(survivor["status_text"]),
 			"target_position": task_target,
 			"has_target": task_target != Vector2.INF,
+			"health": needs.get_need(survivor_id, SurvivorNeeds.NEED_HEALTH),
+			"hunger": needs.get_need(survivor_id, SurvivorNeeds.NEED_HUNGER),
+			"rest": needs.get_need(survivor_id, SurvivorNeeds.NEED_REST),
+			"performance": needs.get_performance_multiplier(survivor_id),
 		})
 	return states
 
@@ -512,6 +522,7 @@ func has_survivor_aboard_unit(unit_id: String) -> bool:
 
 
 func step(delta: float) -> void:
+	needs.step(delta)
 	for index in survivors.size():
 		if not _is_task_active(survivors[index]):
 			continue
@@ -530,6 +541,7 @@ func get_debug_lines() -> Array[String]:
 		lines.append("Crew target: %s" % str(selected.get("task_target", "")))
 		if str(selected["status_text"]) != "":
 			lines.append("Crew status: %s" % str(selected["status_text"]))
+		lines.append("Needs: %s" % needs.get_debug_summary(selected_survivor_id))
 
 	var summaries: Array[String] = []
 	for survivor in survivors:
@@ -613,6 +625,10 @@ func _reserve_target(index: int, task_type: String, reservation_key: String) -> 
 
 func _step_survivor(index: int, delta: float) -> void:
 	var survivor := survivors[index]
+	# Apply needs-based performance multiplier to effective delta.
+	# This makes degraded survivors walk slower without adding complexity.
+	var performance: float = needs.get_performance_multiplier(str(survivor["id"]))
+	var effective_delta: float = delta * performance
 	if str(survivor["task_status"]) == STATUS_ASSIGNED:
 		survivor["task_status"] = STATUS_MOVING
 		survivor["status_text"] = "Walking"
@@ -620,11 +636,11 @@ func _step_survivor(index: int, delta: float) -> void:
 	if str(survivor["task_status"]) == STATUS_MOVING:
 		match str(survivor["task_stage"]):
 			STAGE_ABOARD_TO_EXIT:
-				_step_aboard_to_exit(survivor, delta)
+				_step_aboard_to_exit(survivor, effective_delta)
 			STAGE_ABOARD_ROUTE:
-				_step_aboard_route(survivor, delta)
+				_step_aboard_route(survivor, effective_delta)
 			_:
-				_step_yard_to_target(survivor, delta)
+				_step_yard_to_target(survivor, effective_delta)
 
 	if str(survivor["task_status"]) == STATUS_INTERACTING:
 		var remaining := float(survivor["interaction_remaining"]) - delta

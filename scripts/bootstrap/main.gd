@@ -176,6 +176,7 @@ func get_compact_debug_lines() -> Array[String]:
 			str(selected.get("task_type", "")),
 			str(selected.get("task_target", "")),
 		])
+		lines.append("Needs: %s" % crew.needs.get_debug_summary(crew.get_selected_survivor_id()))
 
 	var status := _latest_status_line()
 	if status != "":
