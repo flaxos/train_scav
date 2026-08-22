@@ -1,6 +1,6 @@
-# Current Sprint — Sprint 5A: Physical Train Interiors
+# Current Sprint — Sprint 5: Train Interior & Crew Simulation (5A, 5B, 5C, 5D)
 
-**Status:** IMPLEMENTED — AUTOMATED TEST + HUMAN PLAYTEST PENDING
+**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (28/28)
 
 ## Why 5A is separate
 Sprint 5 is intentionally split into small playable increments. Sprint 5A proves the spatial foundation first: survivors must physically belong to carriages and move through the connected train before needs, skills, jobs or automatic work are added.
