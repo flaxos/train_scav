@@ -4,6 +4,7 @@ class_name CrewSimulation
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const TrainInterior := preload("res://scripts/colony/train_interior.gd")
 const SurvivorNeeds := preload("res://scripts/colony/survivor_needs.gd")
+const SurvivorSkills := preload("res://scripts/colony/survivor_skills.gd")
 
 const SPATIAL_ABOARD := "aboard"
 const SPATIAL_YARD := "yard"
@@ -41,6 +42,7 @@ var rail: RefCounted
 var yard: RefCounted
 var interior: RefCounted
 var needs: RefCounted
+var skills: RefCounted
 var survivors: Array[Dictionary] = []
 var selected_survivor_id: String = "marta"
 var reservations: Dictionary = {}
@@ -64,6 +66,7 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 	yard = yard_model
 	interior = TrainInterior.new(rail)
 	needs = SurvivorNeeds.new()
+	skills = SurvivorSkills.new()
 
 	survivors = [
 		_make_survivor("marta", "Marta", "L", Vector2(-14.0, -5.0)),
@@ -74,6 +77,43 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 	]
 	for survivor in survivors:
 		needs.init_survivor(str(survivor["id"]))
+
+	# Sprint 5C: Each survivor has a distinct skill profile and job.
+	# Marta: experienced engineer, strong at repairs and mechanical work
+	skills.init_survivor("marta", {
+		SurvivorSkills.SKILL_ENGINEERING: 75.0,
+		SurvivorSkills.SKILL_RAILWAY: 50.0,
+		SurvivorSkills.SKILL_SCAVENGING: 30.0,
+		SurvivorSkills.SKILL_MEDICAL: 15.0,
+	}, SurvivorSkills.JOB_ENGINEER)
+	# Olek: experienced rail worker, good at points and coupling ops
+	skills.init_survivor("olek", {
+		SurvivorSkills.SKILL_ENGINEERING: 30.0,
+		SurvivorSkills.SKILL_RAILWAY: 80.0,
+		SurvivorSkills.SKILL_SCAVENGING: 40.0,
+		SurvivorSkills.SKILL_MEDICAL: 10.0,
+	}, SurvivorSkills.JOB_RAIL_WORKER)
+	# Nia: scavenger, good at finding and recovering things
+	skills.init_survivor("nia", {
+		SurvivorSkills.SKILL_ENGINEERING: 20.0,
+		SurvivorSkills.SKILL_RAILWAY: 15.0,
+		SurvivorSkills.SKILL_SCAVENGING: 85.0,
+		SurvivorSkills.SKILL_MEDICAL: 25.0,
+	}, SurvivorSkills.JOB_SCAVENGER)
+	# Pavel: generalist with decent all-round skills
+	skills.init_survivor("pavel", {
+		SurvivorSkills.SKILL_ENGINEERING: 45.0,
+		SurvivorSkills.SKILL_RAILWAY: 40.0,
+		SurvivorSkills.SKILL_SCAVENGING: 50.0,
+		SurvivorSkills.SKILL_MEDICAL: 35.0,
+	}, SurvivorSkills.JOB_GENERALIST)
+	# Iris: medic, trained in medical skills
+	skills.init_survivor("iris", {
+		SurvivorSkills.SKILL_ENGINEERING: 15.0,
+		SurvivorSkills.SKILL_RAILWAY: 20.0,
+		SurvivorSkills.SKILL_SCAVENGING: 30.0,
+		SurvivorSkills.SKILL_MEDICAL: 80.0,
+	}, SurvivorSkills.JOB_MEDIC)
 
 
 func get_survivor_ids() -> Array[String]:
@@ -141,6 +181,9 @@ func get_survivor_draw_states() -> Array[Dictionary]:
 			"hunger": needs.get_need(survivor_id, SurvivorNeeds.NEED_HUNGER),
 			"rest": needs.get_need(survivor_id, SurvivorNeeds.NEED_REST),
 			"performance": needs.get_performance_multiplier(survivor_id),
+			"job": skills.get_job(survivor_id),
+			"job_label": skills.get_job_label(skills.get_job(survivor_id)),
+			"skills": skills.get_all_skills(survivor_id),
 		})
 	return states
 
@@ -542,6 +585,7 @@ func get_debug_lines() -> Array[String]:
 		if str(selected["status_text"]) != "":
 			lines.append("Crew status: %s" % str(selected["status_text"]))
 		lines.append("Needs: %s" % needs.get_debug_summary(selected_survivor_id))
+		lines.append("Skills: %s" % skills.get_debug_summary(selected_survivor_id))
 
 	var summaries: Array[String] = []
 	for survivor in survivors:
@@ -589,7 +633,8 @@ func _assign_travel_task(index: int, task_type: String, target_position: Vector2
 	survivor["task_target_position"] = target_position
 	survivor["task_target_local"] = BOARDING_LOCAL_OFFSET
 	survivor["task_data"] = data.duplicate(true)
-	survivor["interaction_remaining"] = interaction_duration
+	var speed_mult: float = skills.get_task_speed_multiplier(str(survivor["id"]), task_type)
+	survivor["interaction_remaining"] = interaction_duration / maxf(speed_mult, 0.1)
 	survivor["reservation_key"] = reservation_key
 	survivor["status_text"] = "Assigned"
 	survivors[index] = survivor
