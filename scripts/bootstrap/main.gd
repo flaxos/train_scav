@@ -5,6 +5,9 @@ const CrewSimulation := preload("res://scripts/crew/crew_simulation.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
 const TrainInterior := preload("res://scripts/colony/train_interior.gd")
 const TaskBroker := preload("res://scripts/colony/task_broker.gd")
+const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
+const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
+const SectorLifecycle := preload("res://scripts/sector/sector_lifecycle.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -73,6 +76,7 @@ var crew: CrewSimulation
 var yard: YardOperations
 var interior: TrainInterior
 var task_broker: RefCounted
+var lifecycle: RefCounted
 var _throttle_up_held: bool = false
 var _throttle_down_held: bool = false
 var _brake_held: bool = false
@@ -91,6 +95,7 @@ func _ready() -> void:
 	interior = TrainInterior.new(rail)
 	crew = CrewSimulation.new(rail, yard)
 	task_broker = TaskBroker.new(crew, yard, rail)
+	lifecycle = SectorLifecycle.new(12345, crew, task_broker)
 	_refresh_instruction_text()
 	_layout_ui()
 	queue_redraw()
@@ -125,6 +130,8 @@ func get_debug_panel_rect() -> Rect2:
 
 func get_compact_debug_lines() -> Array[String]:
 	var lines: Array[String] = []
+	if rail == null or yard == null or crew == null:
+		return lines
 	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
 	var yard_control := yard.get_yard_control_state()
 	var shunter := yard.get_shunter_state()
@@ -135,7 +142,8 @@ func get_compact_debug_lines() -> Array[String]:
 		direction_label = "Rev"
 
 	var auto_label := "ON [V]" if task_broker != null and task_broker.enabled else "OFF [V]"
-	lines.append("Objective: recover [W]  Auto: %s" % auto_label)
+	var sec_id: String = lifecycle.current_sector.definition.sector_id if (lifecycle != null and lifecycle.current_sector != null and lifecycle.current_sector.definition != null) else "sector_a"
+	lines.append("Sector: %s  Auto: %s" % [sec_id, auto_label])
 	var controlled_power := rail.get_controlled_power_unit_id()
 	lines.append("Consist: %s  Control: %s (%s)" % [
 		rail.get_consist_summary(),
@@ -186,6 +194,12 @@ func get_compact_debug_lines() -> Array[String]:
 	if status != "":
 		lines.append("Status: %s" % status)
 	return lines
+
+
+func get_sector_state() -> Dictionary:
+	if lifecycle != null:
+		return lifecycle.get_sector_state()
+	return {}
 
 
 func is_context_menu_open() -> bool:
@@ -452,6 +466,8 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if rail == null:
+		return
 	var missing_driver := ""
 	var report_missing_driver := false
 	if not _controlled_power_has_crew():
@@ -472,6 +488,18 @@ func _process(delta: float) -> void:
 		yard.last_status = missing_driver
 	crew.step(delta)
 	task_broker.step(delta)
+	if lifecycle != null:
+		var transitioned: bool = lifecycle.step()
+		if transitioned:
+			rail = lifecycle.current_sector.rail
+			yard = lifecycle.current_sector.yard
+			interior = crew.interior
+			yard.last_status = "Entered %s (%s)" % [
+				lifecycle.current_sector.definition.sector_id,
+				lifecycle.current_sector.definition.template_name
+			]
+		elif lifecycle.transition_blocked_reason != "":
+			yard.last_status = lifecycle.transition_blocked_reason
 	_refresh_instruction_text()
 	debug_label.text = "\n".join(get_compact_debug_lines())
 	queue_redraw()
@@ -590,6 +618,7 @@ func _draw() -> void:
 	draw_rect(get_playfield_rect(), BACKGROUND_COLOR.lightened(0.02), true)
 	draw_set_transform(_get_world_draw_offset(), 0.0, Vector2(_get_world_draw_scale(), _get_world_draw_scale()))
 	_draw_track()
+	_draw_sector_exit()
 	_draw_yard_auxiliary_tracks()
 	_draw_switch()
 	_draw_coupling_zones()
@@ -602,6 +631,16 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_ui_panels()
 	_draw_context_menu()
+
+
+func _draw_sector_exit() -> void:
+	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
+		return
+	var def: SectorDefinition = lifecycle.current_sector.definition
+	var exit_pos: Vector2 = rail.get_point_on_segment(def.exit_segment, def.exit_distance)
+	var exit_color := Color(0.95, 0.35, 0.35, 0.9) if lifecycle.transition_blocked_reason != "" else Color(0.35, 0.95, 0.85, 0.9)
+	draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), exit_color, 4.0)
+	draw_string(get_theme_default_font(), exit_pos + Vector2(-36.0, -38.0), "EXIT BOUNDARY", HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, exit_color)
 
 
 func _draw_track() -> void:
@@ -1769,7 +1808,7 @@ func _select_powered_control_with_driver(unit_id: String) -> bool:
 
 
 func _controlled_power_has_crew() -> bool:
-	return crew != null and crew.has_survivor_aboard_unit(rail.get_controlled_power_unit_id())
+	return rail != null and crew != null and crew.has_survivor_aboard_unit(rail.get_controlled_power_unit_id())
 
 
 func _layout_ui() -> void:

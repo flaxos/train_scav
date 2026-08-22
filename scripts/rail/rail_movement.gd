@@ -882,6 +882,10 @@ func get_world_position(segment_id: String, segment_distance: float) -> Vector2:
 	return get_position_at_distance(segment_id, segment_distance)
 
 
+func get_point_on_segment(segment_id: String, segment_distance: float) -> Vector2:
+	return get_world_position(segment_id, segment_distance)
+
+
 func get_segment_angle(segment_id: String) -> float:
 	return get_tangent_at_distance(segment_id, 0.0).angle()
 

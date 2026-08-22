@@ -109,6 +109,8 @@ Acceptance:
 ## Phase B — Colony Vertical Slice
 
 ### Sprint 5 — Train becomes a colony
+**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (28/28)
+
 Build:
 - initial carriage interiors;
 - survivors moving through connected train;
@@ -122,6 +124,8 @@ Acceptance:
 > During travel/stops, survivors visibly satisfy basic jobs/needs and an engineer automatically responds to a relevant maintenance task according to priorities.
 
 ### Sprint 6 — Sector lifecycle
+**Current Active Increment:** Sprint 6A — Disposable Sector Lifecycle (uses two deterministic prototype sector templates: Sector A & Sector B; richer composition deferred to 6B if needed).
+
 Build:
 - sector container;
 - entry/exit boundaries;
@@ -129,7 +133,7 @@ Build:
 - destruction of previous sector;
 - generation/loading of next sector;
 - run journal summary;
-- initial deterministic procedural or template-composed generation.
+- initial deterministic template-composed sector lifecycle.
 
 Acceptance:
 > Train exits Sector A, Sector A is destroyed, Train state persists, and the train enters a newly generated Sector B. Returning to A is impossible.

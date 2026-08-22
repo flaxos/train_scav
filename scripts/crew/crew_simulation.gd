@@ -1079,3 +1079,35 @@ func _couple_reservation_key(active_unit: String, detached_unit: String) -> Stri
 
 func _yard_reservation_key(target_type: String, target_id: String) -> String:
 	return "yard:%s:%s" % [target_type, target_id]
+
+
+func are_all_survivors_aboard() -> bool:
+	for s in survivors:
+		if str(s.get("spatial_state", "")) == SPATIAL_YARD:
+			return false
+	return true
+
+
+func get_unboarded_survivor_names() -> Array[String]:
+	var list: Array[String] = []
+	for s in survivors:
+		if str(s.get("spatial_state", "")) == SPATIAL_YARD:
+			list.append(str(s.get("name", s.get("id", "Survivor"))))
+	return list
+
+
+func reset_for_new_sector(new_rail: RefCounted, new_yard: RefCounted) -> void:
+	rail = new_rail
+	yard = new_yard
+	interior = TrainInterior.new(rail)
+	reservations.clear()
+
+	for s in survivors:
+		var t_type := str(s.get("task_type", TASK_NONE))
+		if t_type != TASK_NONE:
+			s["task_status"] = STATUS_CANCELLED
+			s["task_status_reason"] = "Sector transition"
+			s["task_type"] = TASK_NONE
+			s["task_stage"] = ""
+			s["task_target"] = ""
+

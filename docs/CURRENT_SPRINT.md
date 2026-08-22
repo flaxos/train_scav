@@ -1,83 +1,80 @@
-# Current Sprint — Sprint 5: Train Interior & Crew Simulation (5A, 5B, 5C, 5D)
+# Current Sprint — Sprint 6A: Disposable Sector Lifecycle
 
-**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (28/28)
-
-## Why 5A is separate
-Sprint 5 is intentionally split into small playable increments. Sprint 5A proves the spatial foundation first: survivors must physically belong to carriages and move through the connected train before needs, skills, jobs or automatic work are added.
+**Status:** IN PROGRESS — IMPLEMENTATION & VALIDATION
 
 ## Hypothesis
-If survivors visibly occupy rolling stock and can walk through physically connected carriages while the train moves, the train starts to read as a mobile colony rather than only a railway consist.
+If the active train and crew can cross a deterministic sector exit, survive replacement of the entire sector-local world, and appear at the next sector's entry with persistent identities and state intact, then the game can support an irreversible journey through disposable generated sectors.
 
-## In scope
-- Add a read-only railway topology API exposing which rolling-stock units belong to the same physical consist.
-- Add a dedicated train-interior model layered on top of rail authority.
-- Prototype carriage identities:
-  - `L` — locomotive interior;
-  - `A` — bunk/passenger prototype interior;
-  - `B` — storage prototype interior;
-  - `W` — workshop interior;
-  - `S` — boardable shunter cab, but not a through gangway vehicle;
-  - `C` — tanker/external vehicle with no boardable interior or walk-through gangway;
-  - unknown future stock defaults to non-boardable/non-gangway until explicitly configured.
-- Render simple cutaway/programmer-art interiors inside rolling stock.
-- Keep survivors hosted by an explicit carriage ID and local carriage-space position.
-- Allow survivors to walk longitudinally inside a carriage and cross connected gangway doors into adjacent carriages.
-- Model front/rear gangway capability per vehicle end; a coupled joint is walkable only when both facing gangway ends are compatible.
-- Render gangway crossing continuously between the two moving carriage door anchors rather than snapping host carriage in one frame.
-- Preserve the actual clicked local position inside a carriage as the movement destination.
-- Allow onboard movement while the train is moving.
-- Revalidate physical consist connectivity every simulation step.
-- If a joint is uncoupled during an onboard movement task, the survivor remains in the carriage already reached and the impossible remainder of the task becomes blocked.
-- Right-click a connected carriage to issue an explicit `Walk <crew> to <carriage> <interior>` order.
-- Preserve Sprint 4.5 captured-actor context-menu semantics.
+## Architectural Ownership Rule
+**Sector state is disposable. Train and run state are persistent.**
 
-## Explicitly out of scope
-Do NOT add in 5A:
-- hunger, rest or health simulation;
-- food, parts, diesel or inventory economy;
-- skills, roles or professions;
-- automatic job assignment;
-- maintenance faults;
-- hauling/crafting;
-- room construction;
-- pathfinding through arbitrary 2D rooms;
-- save/load;
-- final carriage art;
-- changes to turnout, collision, coupling or traction mechanics unless a genuine blocker is discovered.
+A sector may reference the active train while present, but must NOT authoritatively own:
+- rolling-stock identity;
+- physical consist identity and order;
+- coupler relationships;
+- controlled locomotive or power-unit identity;
+- survivor identity;
+- survivor needs, skills or jobs;
+- run seed, sector index or journal.
 
-## Automated acceptance
-- [ ] Existing Sprint 1–4.5 regression suite remains green.
-- [ ] Railway exposes consist membership without colony code mutating rail arrays.
-- [ ] `L -> A -> B` is recognised as one connected interior route at the default start.
-- [ ] A survivor can walk from `L` through `A` into `B`.
-- [ ] The movement remains valid while the train is moving.
-- [ ] A/B/W expose locomotive/bunk/storage/workshop prototype interior identities as intended.
-- [ ] Tanker `C` cannot be boarded and is not treated as a walk-through passenger gangway.
-- [ ] Unknown future rolling stock defaults to non-boardable/non-gangway.
-- [ ] Per-end gangway rules allow `L -> A -> B` but prevent fictitious through-corridors through `S`/`C`.
-- [ ] Gangway transition movement is spatially continuous without a one-frame door-to-door teleport.
-- [ ] Right-clicking a position inside a carriage preserves that local position as the destination.
-- [ ] Uncoupling `A/B` prevents a new `L -> B` interior movement order.
-- [ ] If A/B is uncoupled after a survivor reaches `A`, that survivor stays in `A` and the route to `B` blocks.
-- [ ] Scene exposes visible interior draw states.
-- [ ] Right-clicking connected `B` while Marta is aboard the default train offers `Walk Marta to B STORAGE`.
-- [ ] The context action assigns onboard movement rather than a yard/disembark movement.
+Destroying or disposing a sector must not reconstruct the persistent colony from prototype defaults.
 
-## Human playtest gate
-Sprint 5A is complete only when a human confirms in Godot:
+## In-Scope Behaviour
+1. Persistent run-level state (`RunState`) exists independently of disposable sector instances.
+2. Sector container (`SectorInstance`) manages sector ID, seed, sector index, entry/exit boundaries, sector-local rail/yard state, and active/disposed lifecycle state.
+3. The run starts in deterministic Sector A at sector index 0.
+4. Two deterministic prototype sector templates exist: Sector A (index 0) and Sector B (index 1+).
+5. Controlled train crossing Sector A's exit boundary requests a transition.
+6. Departure Safety Rule: All persistent survivors must be aboard the persistent train before sector disposal. If any survivor is in the yard, departure is blocked with a clear reason.
+7. Upon transition, persistent train/crew/broker state is retained, Sector A is disposed, Sector B is generated deterministically, and the train is placed on Sector B's entry rail position.
+8. Returning to Sector A is impossible.
+9. A run journal entry records departed sector ID, entered sector ID, destination seed, and consist order.
+10. Debug panel visibly exposes current sector ID, seed, sector index, transition count, previous-sector disposal state, and consist order.
 
-- [ ] Rolling stock visibly reads as having a simple interior/cutaway layer rather than survivors floating on coloured rectangles.
-- [ ] `L`, `A BUNK`, `B STORAGE`, and `W WORKSHOP` are visually distinguishable enough for prototype UAT.
-- [ ] Select/right-click behaviour from Sprint 4.5 remains clear.
-- [ ] Selecting a survivor aboard `L`, right-clicking `B`, and choosing `Walk ... to B STORAGE` visibly moves that survivor through `L -> A -> B`.
-- [ ] The survivor stays attached to the moving/curving carriage rather than drifting in world space.
-- [ ] Movement between cars feels continuous enough for a prototype; no teleport to the destination carriage.
-- [ ] Splitting the train at A/B makes B physically inaccessible from L/A.
-- [ ] A survivor already on the L/A side of a split does not cross the disconnected joint.
-- [ ] Existing yard driving, shunting, points and coupling remain usable.
+## Persistence Contract
+Preserve across transition:
+- rolling-stock IDs and physical consist order;
+- coupler relationships;
+- controlled locomotive/power-unit ID;
+- survivor IDs, host-carriage IDs, health, hunger, rest values, skills, and jobs;
+- automatic task-dispatch enabled/disabled preference;
+- run seed, sector index, and run journal.
 
-## Definition of done
-When automated tests and the human gate pass, commit/tag Sprint 5A. Sprint 5B may then add minimal needs without changing the railway movement layer or replacing the physical interior topology.
+## Departure Safety Rule
+All persistent survivors must be aboard the departing persistent train (`SPATIAL_ABOARD`). If any survivor is in the yard (`SPATIAL_YARD`), block departure and expose a clear status message.
 
-## Next increment
-Sprint 5B — **Minimal needs: health, hunger and rest**.
+## Explicit Exclusions
+Do NOT implement in 6A:
+- disk save/load or full serialisation;
+- random terrain generation or procedural rail networks;
+- POIs, scavenging, expeditions, resources (diesel, food, parts);
+- combat, threats, factions, weather;
+- multiple simultaneously loaded sectors or backtracking;
+- minimap, loading screens, or endless sector generation.
+
+## Automated Acceptance
+- [ ] Existing Sprint 1–5 regression suite remains green (28/28).
+- [ ] Run starts in deterministic Sector A with run seed and index 0.
+- [ ] Departure blocked if any survivor is in the yard.
+- [ ] Authoritative exit boundary crossing triggers transition once all survivors are aboard.
+- [ ] Sector A is disposed (`disposed == true`).
+- [ ] Sector B becomes active at index 1 with deterministic seed.
+- [ ] Persistent train/crew/needs/skills/jobs/broker state preserved intact.
+- [ ] Sector-local tasks/reservations from Sector A cancelled.
+- [ ] Sector B entry does not re-trigger transition (idempotent).
+- [ ] Run journal records transition details.
+- [ ] Debug state exposes sector lifecycle telemetry.
+- [ ] Full regression suite (Sprint 1–6A) passes 100%.
+
+## Human Playtest Gate
+- Launch project, confirm starting sector is Sector A.
+- Leave survivor in yard, drive to exit -> confirm departure blocked.
+- Board all survivors, drive across exit -> confirm environment transitions to Sector B.
+- Confirm persistent train and crew remain intact on Sector B entry track.
+- Confirm Sector A cannot be revisited.
+
+## Definition of Done
+When all 30 automated acceptance checks pass, code is clean, documentation is reconciled, and git history has a focused commit for Sprint 6A.
+
+## Next Possible Increment
+Sprint 6B — Richer sector template composition and procedural track variety (if needed).
