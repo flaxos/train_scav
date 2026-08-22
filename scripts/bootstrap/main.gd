@@ -3,6 +3,7 @@ extends Control
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const CrewSimulation := preload("res://scripts/crew/crew_simulation.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
+const TrainInterior := preload("res://scripts/colony/train_interior.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -26,6 +27,12 @@ const UNIT_LABEL_COLOR := Color(0.98, 0.98, 0.95, 1.0)
 const SURVIVOR_ABOARD_COLOR := Color(0.42, 0.78, 1.0, 1.0)
 const SURVIVOR_YARD_COLOR := Color(0.96, 0.84, 0.34, 1.0)
 const SURVIVOR_SELECTED_COLOR := Color(1.0, 1.0, 1.0, 1.0)
+const SURVIVOR_SELECTED_HALO_COLOR := Color(1.0, 1.0, 1.0, 0.14)
+const INTERIOR_FLOOR_COLOR := Color(0.12, 0.15, 0.17, 0.92)
+const INTERIOR_WALKWAY_COLOR := Color(0.68, 0.72, 0.74, 0.62)
+const INTERIOR_FIXTURE_COLOR := Color(0.82, 0.72, 0.46, 0.78)
+const INTERIOR_DOOR_COLOR := Color(0.40, 0.88, 0.72, 0.95)
+const INTERIOR_LABEL_COLOR := Color(0.92, 0.94, 0.93, 0.95)
 const TASK_TARGET_COLOR := Color(0.98, 0.88, 0.18, 0.9)
 const POINTS_ANCHOR_COLOR := Color(0.95, 0.48, 0.20, 1.0)
 const JOINT_ANCHOR_COLOR := Color(0.56, 0.85, 0.48, 1.0)
@@ -53,6 +60,7 @@ const INSTRUCTION_PANEL_HEIGHT := 310.0
 const WORLD_BOUNDS := Rect2(Vector2(120.0, 250.0), Vector2(1580.0, 360.0))
 const CONTEXT_MENU_WIDTH := 250.0
 const CONTEXT_MENU_ITEM_HEIGHT := 30.0
+const CONTEXT_MENU_HEADER_HEIGHT := 50.0
 const CONTEXT_MENU_PADDING := 8.0
 const CONTEXT_TARGET_RADIUS := 56.0
 
@@ -62,18 +70,23 @@ const CONTEXT_TARGET_RADIUS := 56.0
 var rail: RailMovement
 var crew: CrewSimulation
 var yard: YardOperations
+var interior: TrainInterior
 var _throttle_up_held: bool = false
 var _throttle_down_held: bool = false
 var _brake_held: bool = false
 var context_menu_open: bool = false
 var context_menu_position: Vector2 = Vector2.ZERO
 var context_menu_items: Array[Dictionary] = []
+var context_menu_actor_id: String = ""
+var context_menu_actor_name: String = ""
+var context_menu_target_label: String = ""
 var survivor_selection_confirmed: bool = false
 
 
 func _ready() -> void:
 	rail = RailMovement.new()
 	yard = YardOperations.new(rail)
+	interior = TrainInterior.new(rail)
 	crew = CrewSimulation.new(rail, yard)
 	_refresh_instruction_text()
 	_layout_ui()
@@ -131,9 +144,11 @@ func get_compact_debug_lines() -> Array[String]:
 		_on_off(rail.brake_active),
 		direction_label,
 	])
-	lines.append("Route: P1 %s  P2 %s" % [
+	var p3 := yard.get_point_state(YardOperations.POINT_P3)
+	lines.append("Route: P1 %s  P2 %s  P3 %s" % [
 		str(p1.get("route", "")),
 		str(p2.get("route", "")),
+		str(p3.get("route", "")),
 	])
 	lines.append("Yard: control %s  power %s  remote %s" % [
 		str(yard_control.get("condition", "")),
@@ -148,9 +163,13 @@ func get_compact_debug_lines() -> Array[String]:
 	if selected.is_empty():
 		lines.append("Crew: none")
 	else:
+		var crew_location := str(selected.get("spatial_state", ""))
+		if crew_location == CrewSimulation.SPATIAL_ABOARD:
+			var host_unit := str(selected.get("host_unit", ""))
+			crew_location = "%s %s %s" % [crew_location, host_unit, interior.get_unit_interior_label(host_unit)]
 		lines.append("Crew: %s  %s  %s" % [
 			str(selected.get("name", "")),
-			str(selected.get("spatial_state", "")),
+			crew_location,
 			str(selected.get("task_status", "")),
 		])
 		lines.append("Task: %s  target %s" % [
@@ -173,6 +192,27 @@ func get_context_menu_labels() -> Array[String]:
 	for item in context_menu_items:
 		labels.append(str(item.get("label", "")))
 	return labels
+
+
+func get_context_menu_actor_id() -> String:
+	return context_menu_actor_id
+
+
+func get_context_menu_actor_name() -> String:
+	return context_menu_actor_name
+
+
+func get_context_menu_target_label() -> String:
+	return context_menu_target_label
+
+
+func get_context_menu_header_lines() -> Array[String]:
+	var lines: Array[String] = []
+	if context_menu_actor_name != "":
+		lines.append("CREW: %s" % context_menu_actor_name)
+	if context_menu_target_label != "":
+		lines.append("TARGET: %s" % context_menu_target_label)
+	return lines
 
 
 func get_context_menu_option_position(label_fragment: String) -> Vector2:
@@ -249,6 +289,10 @@ func get_yard_track_connection_report() -> Array[Dictionary]:
 	return report
 
 
+func get_train_interior_draw_states() -> Array[Dictionary]:
+	return interior.get_draw_states()
+
+
 func get_track_visual_style() -> Dictionary:
 	return {
 		"draws_sleepers": true,
@@ -262,8 +306,11 @@ func get_track_visual_style() -> Dictionary:
 func get_switch_route_visual_states() -> Array[Dictionary]:
 	var p1_active_kind := _route_kind_from_route(rail.points_route)
 	var p2_active_kind := _route_kind_from_route(rail.get_yard_point_route(YardOperations.POINT_P2))
+	var p3_active_kind := _route_kind_from_route(rail.get_yard_point_route(YardOperations.POINT_P3))
 	var p2_state := yard.get_point_state(YardOperations.POINT_P2)
+	var p3_state := yard.get_point_state(YardOperations.POINT_P3)
 	var p2_position := p2_state.get("track_position", YardOperations.POINT_P2_TRACK_POSITION) as Vector2
+	var p3_position := p3_state.get("track_position", YardOperations.POINT_P3_TRACK_POSITION) as Vector2
 
 	return [
 		{
@@ -324,6 +371,35 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 				},
 			],
 		},
+		{
+			"point_id": YardOperations.POINT_P3,
+			"position": p3_position,
+			"control_label": "P3 yard ladder: storage / repair",
+			"label_position": p3_position + Vector2(-85.0, -72.0),
+			"active_kind": p3_active_kind,
+			"options": [
+				{
+					"kind": "straight",
+					"route": RailMovement.POINTS_MAIN,
+					"label": _format_route_option_label("straight", "STORAGE", p3_active_kind == "straight"),
+					"target_segment": RailMovement.SEGMENT_YARD_STORAGE,
+					"active": p3_active_kind == "straight",
+					"guide_start": p3_position + Vector2(10.0, 0.0),
+					"guide_end": p3_position + Vector2(130.0, 30.0),
+					"label_position": p3_position + Vector2(60.0, -18.0),
+				},
+				{
+					"kind": "branch",
+					"route": RailMovement.POINTS_SIDING,
+					"label": _format_route_option_label("branch", "REPAIR", p3_active_kind == "branch"),
+					"target_segment": RailMovement.SEGMENT_YARD_REPAIR,
+					"active": p3_active_kind == "branch",
+					"guide_start": p3_position + Vector2(8.0, 8.0),
+					"guide_end": p3_position + Vector2(104.0, 58.0),
+					"label_position": p3_position + Vector2(40.0, 46.0),
+				},
+			],
+		},
 	]
 
 
@@ -337,15 +413,18 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 4 UAT Guide",
+		"Train Scav - Sprint 5A UAT Guide",
 		"Mouse-first operations",
 		"Left click survivor: select",
-		"Right click object: options",
+		"Right click survivor: select + options",
+		"Right click object: options for selected crew",
 		"Left click menu item: confirm",
 		"Drive remains keyboard: W/S Space R",
 		"S starts damaged; repair before control.",
 		"A survivor must be aboard L or S to drive.",
 		"Coupling and uncoupling are crew tasks.",
+		"Carriages now show cutaway prototype interiors.",
+		"Right click connected carriage: walk inside train.",
 		"Switch labels show ACTIVE straight/branch.",
 	]
 	var steps := _get_uat_step_states()
@@ -490,7 +569,7 @@ func _gui_input(event: InputEvent) -> void:
 	if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 		if context_menu_open and _confirm_context_menu_at(mouse_event.position):
 			return
-		context_menu_open = false
+		_close_context_menu()
 		_select_survivor_at(mouse_event.position)
 	elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
 		_open_context_menu(mouse_event.position)
@@ -505,6 +584,7 @@ func _draw() -> void:
 	_draw_switch()
 	_draw_coupling_zones()
 	_draw_rolling_stock()
+	_draw_train_interiors()
 	_draw_couplers()
 	_draw_crew_interaction_anchors()
 	_draw_task_targets()
@@ -723,6 +803,22 @@ func _draw_context_menu() -> void:
 	var menu_rect := _get_context_menu_rect()
 	draw_rect(menu_rect, MENU_BACKGROUND_COLOR, true)
 	draw_rect(menu_rect, MENU_BORDER_COLOR, false, 1.5)
+
+	var header_rect := Rect2(
+		context_menu_position + Vector2(CONTEXT_MENU_PADDING, CONTEXT_MENU_PADDING),
+		Vector2(CONTEXT_MENU_WIDTH - CONTEXT_MENU_PADDING * 2.0, CONTEXT_MENU_HEADER_HEIGHT)
+	)
+	draw_rect(header_rect, PANEL_SECTION_COLOR, true)
+	draw_line(
+		Vector2(header_rect.position.x, header_rect.end.y),
+		Vector2(header_rect.end.x, header_rect.end.y),
+		MENU_BORDER_COLOR,
+		1.0,
+		true
+	)
+	draw_string(font, header_rect.position + Vector2(10.0, 19.0), "CREW: %s" % context_menu_actor_name, HORIZONTAL_ALIGNMENT_LEFT, header_rect.size.x - 20.0, 13, SURVIVOR_SELECTED_COLOR)
+	draw_string(font, header_rect.position + Vector2(10.0, 38.0), "TARGET: %s" % context_menu_target_label, HORIZONTAL_ALIGNMENT_LEFT, header_rect.size.x - 20.0, 12, MENU_TEXT_COLOR)
+
 	for index in context_menu_items.size():
 		var option_rect := _get_context_menu_option_rect(index)
 		draw_rect(option_rect, MENU_ITEM_COLOR, true)
@@ -745,6 +841,87 @@ func _draw_locomotive() -> void:
 func _draw_rolling_stock() -> void:
 	for state in rail.get_unit_draw_states():
 		_draw_unit(state)
+
+
+func _draw_train_interiors() -> void:
+	var font := get_theme_default_font()
+	for state in interior.get_draw_states():
+		_draw_unit_interior(state, font)
+
+
+func _draw_unit_interior(state: Dictionary, font: Font) -> void:
+	var unit_id := str(state.get("id", ""))
+	var kind := str(state.get("interior_kind", ""))
+	var position := state.get("position", Vector2.ZERO) as Vector2
+	var angle := float(state.get("angle", 0.0))
+	var length := float(state.get("length", 48.0))
+	var transform := Transform2D(angle, position)
+	var half_length := maxf(length * 0.5 - 5.0, 4.0)
+
+	var floor_local := PackedVector2Array([
+		Vector2(-half_length, -10.0),
+		Vector2(half_length, -10.0),
+		Vector2(half_length, 10.0),
+		Vector2(-half_length, 10.0),
+	])
+	var floor_world := PackedVector2Array()
+	for point in floor_local:
+		floor_world.append(transform * point)
+	draw_colored_polygon(floor_world, INTERIOR_FLOOR_COLOR)
+
+	var aisle_start := transform * Vector2(-half_length + 3.0, 0.0)
+	var aisle_end := transform * Vector2(half_length - 3.0, 0.0)
+	draw_line(aisle_start, aisle_end, INTERIOR_WALKWAY_COLOR, 2.0, true)
+
+	if bool(state.get("walkable", false)):
+		draw_circle(transform * interior.get_front_door_local(unit_id), 3.6, INTERIOR_DOOR_COLOR)
+		draw_circle(transform * interior.get_rear_door_local(unit_id), 3.6, INTERIOR_DOOR_COLOR)
+	else:
+		draw_line(transform * Vector2(-8.0, -7.0), transform * Vector2(8.0, 7.0), INTERIOR_FIXTURE_COLOR, 2.5, true)
+		draw_line(transform * Vector2(-8.0, 7.0), transform * Vector2(8.0, -7.0), INTERIOR_FIXTURE_COLOR, 2.5, true)
+
+	match kind:
+		TrainInterior.KIND_BUNK:
+			_draw_interior_bunk_fixtures(transform, length)
+		TrainInterior.KIND_STORAGE:
+			_draw_interior_storage_fixtures(transform, length)
+		TrainInterior.KIND_WORKSHOP:
+			_draw_interior_workshop_fixtures(transform, length)
+		TrainInterior.KIND_LOCOMOTIVE, TrainInterior.KIND_SHUNTER:
+			_draw_interior_controls(transform, length)
+
+	if font != null:
+		var normal := Vector2.UP.rotated(angle)
+		var label_position := position + normal * 23.0
+		var label := "%s %s" % [unit_id, str(state.get("interior_label", ""))]
+		draw_string(font, label_position + Vector2(-24.0, 4.0), label, HORIZONTAL_ALIGNMENT_LEFT, 90.0, 10, INTERIOR_LABEL_COLOR)
+
+
+func _draw_interior_bunk_fixtures(transform: Transform2D, length: float) -> void:
+	var usable := maxf(length * 0.5 - 12.0, 8.0)
+	for x in [-usable * 0.55, usable * 0.35]:
+		draw_line(transform * Vector2(x - 7.0, -7.0), transform * Vector2(x + 7.0, -7.0), INTERIOR_FIXTURE_COLOR, 4.0, true)
+		draw_line(transform * Vector2(x - 7.0, 7.0), transform * Vector2(x + 7.0, 7.0), INTERIOR_FIXTURE_COLOR, 4.0, true)
+
+
+func _draw_interior_storage_fixtures(transform: Transform2D, length: float) -> void:
+	var usable := maxf(length * 0.5 - 12.0, 8.0)
+	for x in [-usable * 0.55, 0.0, usable * 0.55]:
+		draw_circle(transform * Vector2(x, -6.5), 3.5, INTERIOR_FIXTURE_COLOR)
+		draw_circle(transform * Vector2(x, 6.5), 3.5, INTERIOR_FIXTURE_COLOR)
+
+
+func _draw_interior_workshop_fixtures(transform: Transform2D, length: float) -> void:
+	var half := maxf(length * 0.5 - 12.0, 8.0)
+	draw_line(transform * Vector2(-half, -7.0), transform * Vector2(half, -7.0), INTERIOR_FIXTURE_COLOR, 4.0, true)
+	for x in [-half * 0.55, 0.0, half * 0.55]:
+		draw_circle(transform * Vector2(x, 7.0), 2.8, INTERIOR_FIXTURE_COLOR)
+
+
+func _draw_interior_controls(transform: Transform2D, length: float) -> void:
+	var panel_x := maxf(length * 0.5 - 14.0, 6.0)
+	draw_line(transform * Vector2(panel_x - 7.0, -7.0), transform * Vector2(panel_x + 1.0, -7.0), INTERIOR_FIXTURE_COLOR, 3.0, true)
+	draw_circle(transform * Vector2(panel_x - 2.0, 6.0), 3.0, INTERIOR_FIXTURE_COLOR)
 
 
 func _draw_couplers() -> void:
@@ -867,12 +1044,16 @@ func _draw_survivor(state: Dictionary, font: Font) -> void:
 
 	draw_circle(position, 8.0, color)
 	draw_arc(position, 9.5, 0.0, TAU, 24, Color(0.05, 0.05, 0.05, 1.0), 2.0)
-	if bool(state.get("selected", false)):
-		draw_arc(position, 14.0, 0.0, TAU, 28, SURVIVOR_SELECTED_COLOR, 2.5)
+	var selected := bool(state.get("selected", false))
+	if selected:
+		draw_circle(position, 17.0, SURVIVOR_SELECTED_HALO_COLOR)
+		draw_arc(position, 15.0, 0.0, TAU, 28, SURVIVOR_SELECTED_COLOR, 3.0)
 
 	if font != null:
 		var name := str(state.get("name", "?"))
 		draw_string(font, position + Vector2(-10.0, -13.0), name.substr(0, 1), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, UNIT_LABEL_COLOR)
+		if selected:
+			draw_string(font, position + Vector2(14.0, 5.0), name, HORIZONTAL_ALIGNMENT_LEFT, 90.0, 12, SURVIVOR_SELECTED_COLOR)
 
 
 func _draw_anchor_icon(position: Vector2, icon: String, color: Color) -> void:
@@ -1115,15 +1296,29 @@ func _get_anchor_label(anchor_id: String, anchor_type: String, state: Dictionary
 
 func _open_context_menu(screen_position: Vector2) -> void:
 	if not get_playfield_rect().has_point(screen_position):
-		context_menu_open = false
-		context_menu_items.clear()
+		_close_context_menu()
 		queue_redraw()
 		return
 
+	# Right-clicking a survivor means "this is the actor". Select them BEFORE
+	# building the menu so the visible selection, menu header and task actor can
+	# never silently refer to different people.
+	var clicked_survivor_id := _get_survivor_id_at_screen_position(screen_position, 11.0)
+	if clicked_survivor_id != "":
+		if crew.select_survivor(clicked_survivor_id):
+			survivor_selection_confirmed = true
+
+	context_menu_actor_id = crew.get_selected_survivor_id()
+	var actor_state := crew.get_survivor_state(context_menu_actor_id)
+	context_menu_actor_name = str(actor_state.get("name", "survivor"))
 	var world_position := _screen_to_world(screen_position)
+	context_menu_target_label = _describe_context_target(world_position, clicked_survivor_id)
+
 	context_menu_items = _build_context_menu_items(world_position)
 	context_menu_open = not context_menu_items.is_empty()
 	context_menu_position = _clamp_context_menu_position(screen_position)
+	if not context_menu_open:
+		_close_context_menu()
 	queue_redraw()
 
 
@@ -1135,9 +1330,10 @@ func _confirm_context_menu_at(screen_position: Vector2) -> bool:
 		if not _get_context_menu_option_rect(index).has_point(screen_position):
 			continue
 
+		# The item carries the actor captured when the menu was opened. This avoids
+		# a stale/global-selection race if selection changes before confirmation.
 		var item := context_menu_items[index].duplicate(true)
-		context_menu_open = false
-		context_menu_items.clear()
+		_close_context_menu()
 		_execute_context_action(item)
 		queue_redraw()
 		return true
@@ -1145,8 +1341,7 @@ func _confirm_context_menu_at(screen_position: Vector2) -> bool:
 	if _get_context_menu_rect().has_point(screen_position):
 		return true
 
-	context_menu_open = false
-	context_menu_items.clear()
+	_close_context_menu()
 	queue_redraw()
 	return false
 
@@ -1158,11 +1353,13 @@ func _build_context_menu_items(world_position: Vector2) -> Array[Dictionary]:
 	_add_infrastructure_context_items(items, world_position)
 	_add_shunter_context_items(items, world_position)
 	_add_powered_control_context_items(items, world_position)
+	_add_interior_context_items(items, world_position)
 	_add_joint_context_items(items, world_position)
 	_add_coupling_context_item(items, world_position)
-	_add_context_item(items, "Move %s here" % _get_selected_survivor_name(), "move", {
-		"target_position": world_position,
-	})
+	if _get_unit_id_near_world_position(world_position) == "":
+		_add_context_item(items, "Move %s here" % _get_selected_survivor_name(), "move", {
+			"target_position": world_position,
+		})
 	return items
 
 
@@ -1257,11 +1454,37 @@ func _add_powered_control_context_items(items: Array[Dictionary], world_position
 		})
 
 
+func _add_interior_context_items(items: Array[Dictionary], world_position: Vector2) -> void:
+	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
+	if selected.is_empty() or str(selected.get("spatial_state", "")) != CrewSimulation.SPATIAL_ABOARD:
+		return
+
+	var target_unit := _get_unit_id_near_world_position(world_position)
+	if target_unit == "" or not interior.is_walkable_unit(target_unit):
+		return
+
+	var host_unit := str(selected.get("host_unit", ""))
+	if not interior.can_walk_between(host_unit, target_unit):
+		return
+
+	var selected_name := str(selected.get("name", _get_selected_survivor_name()))
+	var destination := interior.get_unit_interior_label(target_unit)
+	var label := "Walk %s to %s %s" % [selected_name, target_unit, destination]
+	if host_unit == target_unit:
+		label = "Move %s inside %s %s" % [selected_name, target_unit, destination]
+	_add_context_item(items, label, "move_aboard", {
+		"unit_id": target_unit,
+		"target_local": _get_unit_local_position_for_world(target_unit, world_position),
+	})
+
+
 func _add_board_unit_context_item(items: Array[Dictionary], unit_id: String) -> void:
 	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
 	if selected.is_empty():
 		return
 	if str(selected.get("spatial_state", "")) != CrewSimulation.SPATIAL_YARD:
+		return
+	if not interior.is_boardable_unit(unit_id):
 		return
 
 	var label := "Board %s" % unit_id
@@ -1319,6 +1542,7 @@ func _add_context_item(items: Array[Dictionary], label: String, action: String, 
 	var next_item := data.duplicate(true)
 	next_item["label"] = label
 	next_item["action"] = action
+	next_item["actor_id"] = context_menu_actor_id
 	items.append(next_item)
 
 
@@ -1331,7 +1555,7 @@ func _get_coupling_context_label(contact: Dictionary) -> String:
 
 
 func _execute_context_action(item: Dictionary) -> void:
-	var selected_id := crew.get_selected_survivor_id()
+	var selected_id := str(item.get("actor_id", crew.get_selected_survivor_id()))
 	match str(item.get("action", "")):
 		"move":
 			crew.assign_move(selected_id, item.get("target_position", Vector2.ZERO) as Vector2)
@@ -1341,6 +1565,8 @@ func _execute_context_action(item: Dictionary) -> void:
 			crew.assign_board_nearest(selected_id)
 		"board_unit":
 			crew.assign_board(selected_id, str(item.get("unit_id", "")))
+		"move_aboard":
+			crew.assign_move_aboard(selected_id, str(item.get("unit_id", "")), item.get("target_local", Vector2.ZERO) as Vector2)
 		"operate_yard_point":
 			crew.assign_operate_yard_point(selected_id, str(item.get("point_id", "")))
 		"repair_point":
@@ -1367,7 +1593,10 @@ func _get_context_menu_rect() -> Rect2:
 
 func _get_context_menu_option_rect(index: int) -> Rect2:
 	return Rect2(
-		context_menu_position + Vector2(CONTEXT_MENU_PADDING, CONTEXT_MENU_PADDING + CONTEXT_MENU_ITEM_HEIGHT * float(index)),
+		context_menu_position + Vector2(
+			CONTEXT_MENU_PADDING,
+			CONTEXT_MENU_PADDING + CONTEXT_MENU_HEADER_HEIGHT + CONTEXT_MENU_ITEM_HEIGHT * float(index)
+		),
 		Vector2(CONTEXT_MENU_WIDTH - CONTEXT_MENU_PADDING * 2.0, CONTEXT_MENU_ITEM_HEIGHT)
 	)
 
@@ -1375,7 +1604,7 @@ func _get_context_menu_option_rect(index: int) -> Rect2:
 func _get_context_menu_size() -> Vector2:
 	return Vector2(
 		CONTEXT_MENU_WIDTH,
-		CONTEXT_MENU_PADDING * 2.0 + CONTEXT_MENU_ITEM_HEIGHT * float(context_menu_items.size())
+		CONTEXT_MENU_PADDING * 2.0 + CONTEXT_MENU_HEADER_HEIGHT + CONTEXT_MENU_ITEM_HEIGHT * float(context_menu_items.size())
 	)
 
 
@@ -1386,6 +1615,48 @@ func _clamp_context_menu_position(requested_position: Vector2) -> Vector2:
 		clampf(requested_position.x, playfield.position.x, maxf(playfield.position.x, playfield.end.x - menu_size.x)),
 		clampf(requested_position.y, playfield.position.y, maxf(playfield.position.y, playfield.end.y - menu_size.y))
 	)
+
+
+func _close_context_menu() -> void:
+	context_menu_open = false
+	context_menu_items.clear()
+	context_menu_actor_id = ""
+	context_menu_actor_name = ""
+	context_menu_target_label = ""
+
+
+func _describe_context_target(world_position: Vector2, clicked_survivor_id: String = "") -> String:
+	if clicked_survivor_id != "":
+		var survivor := crew.get_survivor_state(clicked_survivor_id)
+		return str(survivor.get("name", clicked_survivor_id))
+
+	for point_id in yard.get_point_ids():
+		var anchor := yard.get_point_anchor(point_id)
+		if world_position.distance_to(anchor) <= CONTEXT_TARGET_RADIUS:
+			return point_id
+
+	var yard_control := yard.get_yard_control_state()
+	if world_position.distance_to(yard_control.get("repair_anchor", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS:
+		return "Yard control"
+	if world_position.distance_to(yard_control.get("power_anchor", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS:
+		return "Yard power"
+
+	var target_unit := _get_unit_id_near_world_position(world_position)
+	if target_unit != "":
+		return "%s (%s interior)" % [target_unit, interior.get_unit_interior_label(target_unit)]
+
+	for joint in rail.get_coupled_joints():
+		var anchor := joint.get("anchor", Vector2.ZERO) as Vector2
+		if world_position.distance_to(anchor) <= CONTEXT_TARGET_RADIUS:
+			return "Joint %s/%s" % [str(joint.get("front_unit", "?")), str(joint.get("rear_unit", "?"))]
+
+	var contact := rail.get_last_contact_anchor()
+	if not contact.is_empty():
+		var contact_position := contact.get("anchor", contact.get("position", Vector2.ZERO)) as Vector2
+		if world_position.distance_to(contact_position) <= CONTEXT_TARGET_RADIUS:
+			return "Coupling contact"
+
+	return "Ground"
 
 
 func _get_selected_survivor_name() -> String:
@@ -1400,6 +1671,27 @@ func _get_unit_draw_state(unit_id: String) -> Dictionary:
 		if str(state.get("id", "")) == unit_id:
 			return state
 	return {}
+
+
+func _get_unit_local_position_for_world(unit_id: String, world_position: Vector2) -> Vector2:
+	var state := _get_unit_draw_state(unit_id)
+	if state.is_empty():
+		return Vector2.ZERO
+	var transform := Transform2D(float(state.get("angle", 0.0)), state.get("position", Vector2.ZERO) as Vector2)
+	var local_position := transform.affine_inverse() * world_position
+	return interior.clamp_local_position(unit_id, local_position)
+
+
+func _get_unit_id_near_world_position(world_position: Vector2) -> String:
+	for state in rail.get_unit_draw_states():
+		var unit_position := state.get("position", Vector2.ZERO) as Vector2
+		var angle := float(state.get("angle", 0.0))
+		var inverse := Transform2D(angle, unit_position).affine_inverse()
+		var local := inverse * world_position
+		var half_length := float(state.get("length", 48.0)) * 0.5 + 6.0
+		if absf(local.x) <= half_length and absf(local.y) <= 18.0:
+			return str(state.get("id", ""))
+	return ""
 
 
 func _is_point_on_modeled_rail(point: Vector2, tolerance: float) -> bool:
@@ -1425,8 +1717,19 @@ func _distance_to_line_segment(point: Vector2, start: Vector2, end: Vector2) -> 
 
 
 func _select_survivor_at(position: Vector2) -> bool:
+	var survivor_id := _get_survivor_id_at_screen_position(position)
+	if survivor_id == "":
+		return false
+
+	var selected := crew.select_survivor(survivor_id)
+	if selected:
+		survivor_selection_confirmed = true
+	return selected
+
+
+func _get_survivor_id_at_screen_position(position: Vector2, hit_radius: float = 18.0) -> String:
 	var nearest_id := ""
-	var nearest_distance := 18.0
+	var nearest_distance := hit_radius
 	var world_position := _screen_to_world(position)
 	for state in crew.get_survivor_draw_states():
 		var survivor_position := state.get("position", Vector2.ZERO) as Vector2
@@ -1436,14 +1739,7 @@ func _select_survivor_at(position: Vector2) -> bool:
 
 		nearest_distance = distance_to_survivor
 		nearest_id = str(state.get("id", ""))
-
-	if nearest_id == "":
-		return false
-
-	var selected := crew.select_survivor(nearest_id)
-	if selected:
-		survivor_selection_confirmed = true
-	return selected
+	return nearest_id
 
 
 func _toggle_controlled_power_unit() -> void:

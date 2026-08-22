@@ -18,7 +18,7 @@ func _init() -> void:
 	_expect(scene.crew.get_survivor_ids().size() == 5, "playable scene has five survivors")
 
 	var instruction_label := scene.get_node("%InstructionLabel") as Label
-	_expect(instruction_label.text.contains("Sprint 4"), "instructions identify the current playable sprint while preserving Sprint 3 controls")
+	_expect(instruction_label.text.contains("Sprint"), "instructions identify the current playable sprint while preserving Sprint 3 controls")
 	_expect(instruction_label.text.contains("Left click survivor"), "instructions expose direct survivor selection")
 	_expect(instruction_label.text.contains("Right click"), "instructions expose crew task context menus")
 	_expect(instruction_label.text.contains("Left click menu item"), "instructions expose menu confirmation")

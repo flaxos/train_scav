@@ -19,7 +19,8 @@ const ROUTE_DIVERGING := "diverging"
 const POINT_P1_ANCHOR := Vector2(512.0, 302.0)
 const POINT_P2_TRACK_POSITION := Vector2(1320.0, 360.0)
 const POINT_P2_ANCHOR := Vector2(1300.0, 332.0)
-const POINT_P3_ANCHOR := Vector2(930.0, 550.0)
+const POINT_P3_TRACK_POSITION := Vector2(1080.0, 515.0)
+const POINT_P3_ANCHOR := Vector2(1045.0, 555.0)
 const YARD_CONTROL_REPAIR_ANCHOR := Vector2(365.0, 585.0)
 const YARD_POWER_ANCHOR := Vector2(420.0, 585.0)
 const SHUNTER_REPAIR_ANCHOR := Vector2(1550.0, 252.0)
@@ -51,12 +52,13 @@ var points: Dictionary = {
 	},
 	POINT_P3: {
 		"id": POINT_P3,
-		"name": "Points C",
+		"name": "Yard Ladder P3",
 		"mechanical_state": MECHANICAL_DAMAGED,
 		"remote_capable": false,
-		"route": ROUTE_DIVERGING,
+		"route": RailMovement.POINTS_SIDING,
 		"anchor": POINT_P3_ANCHOR,
-		"rail_authority": false,
+		"track_position": POINT_P3_TRACK_POSITION,
+		"rail_authority": true,
 	},
 }
 
@@ -69,6 +71,7 @@ func _init(rail_model: RefCounted = null) -> void:
 
 	_sync_p1_from_rail()
 	_sync_p2_from_rail()
+	_sync_p3_from_rail()
 
 
 func get_point_ids() -> Array[String]:
@@ -86,6 +89,8 @@ func get_point_state(point_id: String) -> Dictionary:
 		_sync_p1_from_rail()
 	elif point_id == POINT_P2:
 		_sync_p2_from_rail()
+	elif point_id == POINT_P3:
+		_sync_p3_from_rail()
 
 	var state: Dictionary = points[point_id].duplicate(true)
 	state["occupied"] = is_point_occupied(point_id)
@@ -112,11 +117,14 @@ func manual_operate_point(point_id: String) -> bool:
 		_sync_p1_from_rail()
 		last_status = "Manually operated %s to %s" % [point_id, str(points[point_id]["route"])]
 		return true
-	if point_id == POINT_P2:
+	if point_id == POINT_P2 or point_id == POINT_P3:
 		if not rail.request_yard_point_toggle(point_id):
 			last_status = rail.blocked_reason
 			return false
-		_sync_p2_from_rail()
+		if point_id == POINT_P2:
+			_sync_p2_from_rail()
+		else:
+			_sync_p3_from_rail()
 		last_status = "Manually operated %s to %s" % [point_id, str(points[point_id]["route"])]
 		return true
 
@@ -146,7 +154,7 @@ func repair_point(point_id: String) -> bool:
 func is_point_occupied(point_id: String) -> bool:
 	if point_id == POINT_P1 and rail.has_method("is_switch_occupied"):
 		return rail.is_switch_occupied()
-	if point_id == POINT_P2 and rail.has_method("is_yard_point_occupied"):
+	if (point_id == POINT_P2 or point_id == POINT_P3) and rail.has_method("is_yard_point_occupied"):
 		return rail.is_yard_point_occupied(point_id)
 	return false
 
@@ -257,17 +265,20 @@ func get_interaction_draw_states() -> Array[Dictionary]:
 
 
 func get_yard_track_draw_segments() -> Array[Dictionary]:
+	# These short overrun/apron pieces continue the two modeled P3 routes to clear
+	# buffered ends. The actual route choice and train movement are authoritative
+	# RailMovement segments; these are presentation-only continuations.
 	return [
 		{
-			"id": "middle_storage_siding",
-			"points": [Vector2(720.0, 398.0), Vector2(835.0, 430.0), Vector2(1120.0, 430.0), Vector2(1365.0, 395.0)],
-			"label": "Middle storage siding",
+			"id": "storage_overrun",
+			"points": [Vector2(1560.0, 545.0), Vector2(1640.0, 540.0)],
+			"label": "Storage headshunt",
 			"end_condition": "buffer",
 		},
 		{
-			"id": "lower_repair_siding",
-			"points": [Vector2(850.0, 455.0), Vector2(945.0, 535.0), Vector2(1230.0, 535.0), Vector2(1420.0, 505.0)],
-			"label": "Lower repair siding",
+			"id": "repair_apron",
+			"points": [Vector2(1500.0, 580.0), Vector2(1600.0, 580.0)],
+			"label": "Repair apron",
 			"end_condition": "buffer",
 		},
 	]
@@ -330,6 +341,14 @@ func _sync_p2_from_rail() -> void:
 	if not rail.has_method("get_yard_point_route"):
 		return
 	points[POINT_P2]["route"] = rail.get_yard_point_route(POINT_P2)
+
+
+func _sync_p3_from_rail() -> void:
+	if not points.has(POINT_P3):
+		return
+	if not rail.has_method("get_yard_point_route"):
+		return
+	points[POINT_P3]["route"] = rail.get_yard_point_route(POINT_P3)
 
 
 func _format_bool(value: bool) -> String:

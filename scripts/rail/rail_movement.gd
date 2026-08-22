@@ -5,6 +5,8 @@ const SEGMENT_MAIN_WEST := "main_west"
 const SEGMENT_MAIN_EAST := "main_east"
 const SEGMENT_SIDING := "siding"
 const SEGMENT_SIDING_B := "siding_b"
+const SEGMENT_YARD_STORAGE := "yard_storage"
+const SEGMENT_YARD_REPAIR := "yard_repair"
 
 const POINTS_MAIN := "main"
 const POINTS_SIDING := "siding"
@@ -95,6 +97,24 @@ const _SEGMENT_POINTS := {
 		Vector2(720.0, 398.0),
 		Vector2(850.0, 455.0),
 		Vector2(1080.0, 515.0),
+	],
+	# Sprint 4.5: P3 is now a real second-stage yard turnout. The P1 siding is
+	# the yard lead; P3 fans that lead into two long, roughly parallel sidings.
+	# This gives the prototype a recognisable railway-yard grammar and proves
+	# switch -> switch topology without changing the accepted P2 workshop route.
+	SEGMENT_YARD_STORAGE: [
+		Vector2(1080.0, 515.0),
+		Vector2(1180.0, 540.0),
+		Vector2(1300.0, 552.0),
+		Vector2(1430.0, 552.0),
+		Vector2(1560.0, 545.0),
+	],
+	SEGMENT_YARD_REPAIR: [
+		Vector2(1080.0, 515.0),
+		Vector2(1160.0, 555.0),
+		Vector2(1260.0, 580.0),
+		Vector2(1380.0, 585.0),
+		Vector2(1500.0, 580.0),
 	],
 }
 
@@ -267,20 +287,26 @@ func is_switch_occupied() -> bool:
 
 
 func is_yard_point_occupied(point_id: String) -> bool:
-	if point_id != "P2":
-		return false
-
 	for state in get_unit_draw_states():
 		var segment_id := str(state.get("segment", ""))
 		var segment_distance := float(state.get("distance", 0.0))
 		var half_length := float(state.get("length", 0.0)) * 0.5
 		var clearance := SWITCH_OCCUPANCY_CLEARANCE + half_length
-		if segment_id == SEGMENT_MAIN_EAST:
-			if absf(get_segment_length(SEGMENT_MAIN_EAST) - segment_distance) <= clearance:
+
+		if point_id == "P2":
+			if segment_id == SEGMENT_MAIN_EAST:
+				if absf(get_segment_length(SEGMENT_MAIN_EAST) - segment_distance) <= clearance:
+					return true
+			elif segment_id == SEGMENT_SIDING_B and segment_distance <= clearance:
 				return true
-		elif segment_id == SEGMENT_SIDING_B:
-			if segment_distance <= clearance:
-				return true
+
+		elif point_id == "P3":
+			if segment_id == SEGMENT_SIDING:
+				if absf(get_segment_length(SEGMENT_SIDING) - segment_distance) <= clearance:
+					return true
+			elif segment_id == SEGMENT_YARD_STORAGE or segment_id == SEGMENT_YARD_REPAIR:
+				if segment_distance <= clearance:
+					return true
 
 	return false
 
@@ -291,6 +317,25 @@ func is_stopped() -> bool:
 
 func get_active_consist_ids() -> Array[String]:
 	return active_units.duplicate()
+
+
+func get_consist_unit_ids_for(unit_id: String) -> Array[String]:
+	# Read-only topology API for colony/interior systems. The railway remains the
+	# authority for physical consist membership; consumers must not rebuild or
+	# mutate consist arrays themselves.
+	if active_units.has(unit_id):
+		return active_units.duplicate()
+
+	for consist in detached_consists:
+		var units := _get_detached_units(consist)
+		if units.has(unit_id):
+			return units.duplicate()
+	return []
+
+
+func are_units_in_same_consist(first_unit: String, second_unit: String) -> bool:
+	var units := get_consist_unit_ids_for(first_unit)
+	return not units.is_empty() and units.has(second_unit)
 
 
 func get_active_occupied_interval() -> Dictionary:
@@ -871,6 +916,7 @@ func get_debug_lines() -> Array[String]:
 	lines.append("Brake: %s" % _format_bool(brake_active))
 	lines.append("Points: %s" % points_route)
 	lines.append("Yard P2: %s" % get_yard_point_route("P2"))
+	lines.append("Yard P3: %s" % get_yard_point_route("P3"))
 	lines.append("Mass: %.1f t" % get_total_mass())
 	lines.append("Condition: %s" % condition_state)
 	lines.append("Couplers: %s" % _format_coupler_summary())
@@ -1033,8 +1079,12 @@ func _leave_endpoint_b() -> bool:
 			blocked_reason = "End of main line"
 		SEGMENT_SIDING_B:
 			blocked_reason = "End of workshop siding"
+		SEGMENT_YARD_STORAGE:
+			blocked_reason = "End of storage siding"
+		SEGMENT_YARD_REPAIR:
+			blocked_reason = "End of repair siding"
 		SEGMENT_SIDING:
-			blocked_reason = "End of siding"
+			blocked_reason = "No route through P3"
 		SEGMENT_MAIN_WEST:
 			blocked_reason = "No route through points"
 	return false
@@ -1109,6 +1159,10 @@ func _is_trailing_route_aligned(segment_id: String) -> bool:
 			return points_route == POINTS_SIDING
 		SEGMENT_SIDING_B:
 			return get_yard_point_route("P2") == POINTS_SIDING
+		SEGMENT_YARD_STORAGE:
+			return get_yard_point_route("P3") == POINTS_MAIN
+		SEGMENT_YARD_REPAIR:
+			return get_yard_point_route("P3") == POINTS_SIDING
 	return true
 
 
@@ -1120,6 +1174,10 @@ func _get_trailing_route_block_reason(segment_id: String) -> String:
 			return "P1 route blocks siding"
 		SEGMENT_SIDING_B:
 			return "P2 route blocks workshop siding"
+		SEGMENT_YARD_STORAGE:
+			return "P3 route blocks storage siding"
+		SEGMENT_YARD_REPAIR:
+			return "P3 route blocks repair siding"
 	return "No route through points"
 
 
@@ -1133,6 +1191,8 @@ func _get_previous_segment(segment_id: String) -> String:
 			return SEGMENT_MAIN_WEST
 		SEGMENT_SIDING_B:
 			return SEGMENT_MAIN_EAST
+		SEGMENT_YARD_STORAGE, SEGMENT_YARD_REPAIR:
+			return SEGMENT_SIDING
 	return ""
 
 
@@ -1148,6 +1208,10 @@ func _get_next_segment(segment_id: String) -> String:
 		SEGMENT_MAIN_EAST:
 			if get_yard_point_route("P2") == POINTS_SIDING:
 				return SEGMENT_SIDING_B
+		SEGMENT_SIDING:
+			if get_yard_point_route("P3") == POINTS_SIDING:
+				return SEGMENT_YARD_REPAIR
+			return SEGMENT_YARD_STORAGE
 	return ""
 
 

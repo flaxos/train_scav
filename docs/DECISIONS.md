@@ -77,3 +77,15 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-019 — Crew presence gates playable railway operations
 **Decision:** In the playable scene, throttle control for a locomotive/shunter requires at least one survivor aboard that powered unit. Coupling and uncoupling are crew tasks against explicit contact/joint anchors; normal UI actions do not directly splice or append consists.
 **Reason:** The demo should prove Train Scav's core idea that railway operations are physical work done by people and rolling stock, not hidden keyboard shortcuts or proximity-based array mutations.
+
+## D-020 — Yard layouts use explicit railway grammar
+**Decision:** Hand-authored yards should read as railway infrastructure: a dominant main line, yard leads, facing turnouts, roughly parallel sidings and deliberate buffered ends. Sprint 4.5 makes P3 an authoritative second-stage turnout from the P1 yard lead into storage/repair sidings.
+**Reason:** Track can remain simplified without looking arbitrary; recognisable railway grammar supports the intended transport-management feel and gives later procedural generation a reusable topology vocabulary.
+
+## D-021 — Context-menu commands capture their crew actor
+**Decision:** Right-clicking a survivor selects that survivor before menu creation. Object right-click preserves the current crew selection. Every menu command stores the actor ID captured when the menu opens, and the menu visibly names both crew and target.
+**Reason:** A mutable global selection must not silently redirect an already-presented order to another survivor, especially once Sprint 5 adds needs and automatic jobs.
+
+## D-022 — Carriage interiors depend on physical consist topology
+**Decision:** Survivor onboard movement uses rolling-stock IDs and local carriage coordinates, and asks the railway domain which units belong to the same physical consist. Colony code does not duplicate or mutate consist topology. A survivor may cross only walkable adjacent vehicles in the current consist; uncoupling immediately invalidates routes across that joint.
+**Reason:** The train must remain one physical simulation. This allows crew to move while carriages translate/rotate on track, makes shunting materially affect colony accessibility, and prevents a future colony pathfinder from inventing connections that the railway no longer has.

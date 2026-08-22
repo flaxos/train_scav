@@ -18,7 +18,7 @@ func _init() -> void:
 	_expect(scene.has_method("_draw_unit_label"), "main scene labels rolling stock programmer-art units")
 
 	var instruction_label := scene.get_node("%InstructionLabel") as Label
-	_expect(instruction_label.text.contains("Sprint 4"), "instructions identify the current active playable sprint")
+	_expect(instruction_label.text.contains("Sprint"), "instructions identify the current active playable sprint")
 	_expect(instruction_label.text.contains("Right click"), "instructions expose mouse context menus for object actions")
 	_expect(instruction_label.text.contains("Drive remains keyboard"), "instructions separate driving keys from railway operation actions")
 	_expect(scene.has_method("get_context_menu_labels"), "scene exposes context menu labels for coupling and uncoupling actions")

@@ -2,6 +2,7 @@ extends RefCounted
 class_name CrewSimulation
 
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
+const TrainInterior := preload("res://scripts/colony/train_interior.gd")
 
 const SPATIAL_ABOARD := "aboard"
 const SPATIAL_YARD := "yard"
@@ -18,6 +19,7 @@ const TASK_REPAIR_SHUNTER := "repair_shunter"
 const TASK_REPAIR_YARD_CONTROL := "repair_yard_control"
 const TASK_CONNECT_POWER := "connect_power"
 const TASK_REPAIR_POINT := "repair_point"
+const TASK_MOVE_ABOARD := "move_aboard"
 
 const STATUS_IDLE := "idle"
 const STATUS_ASSIGNED := "assigned"
@@ -29,12 +31,14 @@ const STATUS_CANCELLED := "cancelled"
 
 const STAGE_ABOARD_TO_EXIT := "aboard_to_exit"
 const STAGE_YARD_TO_TARGET := "yard_to_target"
+const STAGE_ABOARD_ROUTE := "aboard_route"
 
 const BOARDING_LOCAL_OFFSET := Vector2(0.0, 36.0)
 const DEFAULT_ABOARD_LOCAL_OFFSET := Vector2(-10.0, 0.0)
 
 var rail: RefCounted
 var yard: RefCounted
+var interior: RefCounted
 var survivors: Array[Dictionary] = []
 var selected_survivor_id: String = "marta"
 var reservations: Dictionary = {}
@@ -56,6 +60,7 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 	else:
 		rail = rail_model
 	yard = yard_model
+	interior = TrainInterior.new(rail)
 
 	survivors = [
 		_make_survivor("marta", "Marta", "L", Vector2(-14.0, -5.0)),
@@ -174,6 +179,38 @@ func has_active_tasks() -> bool:
 	return false
 
 
+func assign_move_aboard(survivor_id: String, target_unit: String, target_local: Vector2 = Vector2.ZERO) -> bool:
+	var index := _find_survivor_index(survivor_id)
+	if index < 0:
+		return false
+
+	var survivor := survivors[index]
+	if str(survivor.get("spatial_state", "")) != SPATIAL_ABOARD:
+		_fail_survivor(index, TASK_MOVE_ABOARD, "Must be aboard to move through train")
+		return false
+
+	var host_unit := str(survivor.get("host_unit", ""))
+	if not interior.can_walk_between(host_unit, target_unit):
+		_fail_survivor(index, TASK_MOVE_ABOARD, "No connected interior route")
+		return false
+
+	_release_reservation(survivor)
+	survivor["task_type"] = TASK_MOVE_ABOARD
+	survivor["task_status"] = STATUS_ASSIGNED
+	survivor["task_stage"] = STAGE_ABOARD_ROUTE
+	survivor["task_target"] = target_unit
+	survivor["task_target_position"] = Vector2.INF
+	survivor["task_data"] = {
+		"target_unit": target_unit,
+		"target_local": interior.clamp_local_position(target_unit, target_local),
+	}
+	survivor["interaction_remaining"] = 0.0
+	survivor["reservation_key"] = ""
+	survivor["status_text"] = "Walking through train"
+	survivors[index] = survivor
+	return true
+
+
 func assign_move(survivor_id: String, target_position: Vector2) -> bool:
 	var index := _find_survivor_index(survivor_id)
 	if index < 0:
@@ -221,6 +258,9 @@ func assign_board(survivor_id: String, unit_id: String) -> bool:
 	if _get_unit_draw_state(unit_id).is_empty():
 		_fail_survivor(index, TASK_BOARD, "Boarding target missing")
 		return false
+	if not interior.is_boardable_unit(unit_id):
+		_fail_survivor(index, TASK_BOARD, "%s has no boardable interior" % unit_id)
+		return false
 
 	_assign_travel_task(index, TASK_BOARD, _get_boarding_anchor(unit_id), unit_id, {"unit": unit_id}, board_interaction_duration, "")
 	return true
@@ -237,6 +277,8 @@ func assign_board_nearest(survivor_id: String) -> bool:
 	var best_distance := INF
 	for state in rail.get_unit_draw_states():
 		var unit_id := str(state.get("id", ""))
+		if not interior.is_boardable_unit(unit_id):
+			continue
 		var anchor := _get_boarding_anchor(unit_id)
 		var distance_to_anchor := current_position.distance_to(anchor)
 		if distance_to_anchor >= best_distance:
@@ -576,10 +618,13 @@ func _step_survivor(index: int, delta: float) -> void:
 		survivor["status_text"] = "Walking"
 
 	if str(survivor["task_status"]) == STATUS_MOVING:
-		if str(survivor["task_stage"]) == STAGE_ABOARD_TO_EXIT:
-			_step_aboard_to_exit(survivor, delta)
-		else:
-			_step_yard_to_target(survivor, delta)
+		match str(survivor["task_stage"]):
+			STAGE_ABOARD_TO_EXIT:
+				_step_aboard_to_exit(survivor, delta)
+			STAGE_ABOARD_ROUTE:
+				_step_aboard_route(survivor, delta)
+			_:
+				_step_yard_to_target(survivor, delta)
 
 	if str(survivor["task_status"]) == STATUS_INTERACTING:
 		var remaining := float(survivor["interaction_remaining"]) - delta
@@ -590,6 +635,120 @@ func _step_survivor(index: int, delta: float) -> void:
 			return
 
 	survivors[index] = survivor
+
+
+func _step_aboard_route(survivor: Dictionary, delta: float) -> void:
+	var data := survivor.get("task_data", {}) as Dictionary
+	var target_unit := str(data.get("target_unit", ""))
+	var target_local := data.get("target_local", Vector2.ZERO) as Vector2
+	var current_unit := str(survivor.get("host_unit", ""))
+
+	# A survivor may be physically between two gangway doors for a short time.
+	# Keep the source host until the crossing completes, but render their world
+	# position as interpolation between the moving door anchors. If the joint is
+	# uncoupled during the crossing, snap safely back to the source door and block.
+	var crossing_to := str(data.get("crossing_to_unit", ""))
+	if crossing_to != "":
+		if not _can_cross_current_joint(current_unit, crossing_to):
+			survivor["local_offset"] = data.get("crossing_from_local", survivor.get("local_offset", Vector2.ZERO)) as Vector2
+			_clear_crossing_data(data)
+			survivor["task_data"] = data
+			survivor["task_status"] = STATUS_BLOCKED
+			survivor["status_text"] = "Interior route disconnected"
+			return
+
+		var from_local := data.get("crossing_from_local", Vector2.ZERO) as Vector2
+		var to_local := data.get("crossing_to_local", Vector2.ZERO) as Vector2
+		var from_world := _world_from_unit_local(current_unit, from_local)
+		var to_world := _world_from_unit_local(crossing_to, to_local)
+		var gap := maxf(from_world.distance_to(to_world), 1.0)
+		var progress := clampf(float(data.get("crossing_progress", 0.0)) + aboard_walk_speed * delta / gap, 0.0, 1.0)
+		data["crossing_progress"] = progress
+		survivor["task_data"] = data
+		survivor["status_text"] = "Crossing gangway to %s" % crossing_to
+		if progress < 1.0:
+			return
+
+		survivor["host_unit"] = crossing_to
+		survivor["local_offset"] = to_local
+		_clear_crossing_data(data)
+		survivor["task_data"] = data
+		# Return after completing the gangway crossing. Continuing in the same
+		# frame would add a full delta of walking inside the next carriage on
+		# top of the crossing movement, producing a spatial teleport.
+		return
+
+	# Revalidate against authoritative rail topology every step. If a joint is
+	# uncoupled while someone is walking through the train, the survivor remains
+	# in the carriage they physically reached and the now-impossible task blocks.
+	if not interior.can_walk_between(current_unit, target_unit):
+		survivor["task_status"] = STATUS_BLOCKED
+		survivor["status_text"] = "Interior route disconnected"
+		return
+
+	if current_unit == target_unit:
+		var current_local := survivor.get("local_offset", Vector2.ZERO) as Vector2
+		var next_local := current_local.move_toward(target_local, aboard_walk_speed * delta)
+		survivor["local_offset"] = interior.clamp_local_position(current_unit, next_local)
+		if next_local.distance_to(target_local) <= move_arrival_epsilon:
+			survivor["local_offset"] = target_local
+			survivor["task_status"] = STATUS_COMPLETED
+			survivor["status_text"] = "Arrived in %s" % target_unit
+		return
+
+	var units: Array[String] = interior.get_consist_units_for(current_unit)
+	var current_index: int = units.find(current_unit)
+	var target_index: int = units.find(target_unit)
+	if current_index < 0 or target_index < 0:
+		survivor["task_status"] = STATUS_BLOCKED
+		survivor["status_text"] = "Interior route disconnected"
+		return
+
+	var moving_rearward: bool = target_index > current_index
+	var door_local: Vector2 = interior.get_rear_door_local(current_unit) if moving_rearward else interior.get_front_door_local(current_unit)
+	var local_position := survivor.get("local_offset", Vector2.ZERO) as Vector2
+	var next_position := local_position.move_toward(door_local, aboard_walk_speed * delta)
+	survivor["local_offset"] = interior.clamp_local_position(current_unit, next_position)
+	if next_position.distance_to(door_local) > move_arrival_epsilon:
+		return
+
+	var next_index: int = current_index + (1 if moving_rearward else -1)
+	var next_unit: String = units[next_index]
+	if not _can_cross_current_joint(current_unit, next_unit):
+		survivor["task_status"] = STATUS_BLOCKED
+		survivor["status_text"] = "No compatible gangway to %s" % next_unit
+		return
+
+	var next_door: Vector2 = interior.get_front_door_local(next_unit) if moving_rearward else interior.get_rear_door_local(next_unit)
+	# Use the survivor's actual clamped position as the crossing origin rather
+	# than the ideal door coordinate.  The survivor arrives within
+	# move_arrival_epsilon of the door, so they may be a few pixels short; using
+	# the raw door_local here would create a one-frame spatial jump equal to
+	# that epsilon gap.
+	var actual_local: Vector2 = survivor.get("local_offset", door_local) as Vector2
+	data["crossing_to_unit"] = next_unit
+	data["crossing_from_local"] = actual_local
+	data["crossing_to_local"] = next_door
+	data["crossing_progress"] = 0.0
+	survivor["task_data"] = data
+	survivor["status_text"] = "Entering gangway to %s" % next_unit
+
+
+func _can_cross_current_joint(from_unit: String, to_unit: String) -> bool:
+	var units: Array[String] = interior.get_consist_units_for(from_unit)
+	var from_index: int = units.find(from_unit)
+	var to_index: int = units.find(to_unit)
+	if from_index < 0 or to_index < 0 or absi(from_index - to_index) != 1:
+		return false
+	var front_index := mini(from_index, to_index)
+	return interior.can_walk_joint(units[front_index], units[front_index + 1])
+
+
+func _clear_crossing_data(data: Dictionary) -> void:
+	data.erase("crossing_to_unit")
+	data.erase("crossing_from_local")
+	data.erase("crossing_to_local")
+	data.erase("crossing_progress")
 
 
 func _step_aboard_to_exit(survivor: Dictionary, delta: float) -> void:
@@ -647,6 +806,9 @@ func _execute_task(index: int) -> void:
 			elif _get_unit_draw_state(unit_id).is_empty():
 				succeeded = false
 				failure_reason = "Boarding target missing"
+			elif not interior.is_boardable_unit(unit_id):
+				succeeded = false
+				failure_reason = "%s has no boardable interior" % unit_id
 			else:
 				survivor["spatial_state"] = SPATIAL_ABOARD
 				survivor["host_unit"] = unit_id
@@ -769,6 +931,14 @@ func _find_survivor_index(survivor_id: String) -> int:
 
 func _get_survivor_world_position(survivor: Dictionary) -> Vector2:
 	if str(survivor["spatial_state"]) == SPATIAL_ABOARD:
+		var data := survivor.get("task_data", {}) as Dictionary
+		var crossing_to := str(data.get("crossing_to_unit", ""))
+		if crossing_to != "":
+			var from_unit := str(survivor.get("host_unit", ""))
+			var from_local := data.get("crossing_from_local", survivor.get("local_offset", Vector2.ZERO)) as Vector2
+			var to_local := data.get("crossing_to_local", Vector2.ZERO) as Vector2
+			var progress := clampf(float(data.get("crossing_progress", 0.0)), 0.0, 1.0)
+			return _world_from_unit_local(from_unit, from_local).lerp(_world_from_unit_local(crossing_to, to_local), progress)
 		return _world_from_unit_local(str(survivor["host_unit"]), survivor["local_offset"] as Vector2)
 	return survivor["yard_position"] as Vector2
 
@@ -777,13 +947,28 @@ func _get_survivor_angle(survivor: Dictionary) -> float:
 	if str(survivor["spatial_state"]) != SPATIAL_ABOARD:
 		return 0.0
 
-	var state := _get_unit_draw_state(str(survivor["host_unit"]))
-	if state.is_empty():
+	var from_state := _get_unit_draw_state(str(survivor["host_unit"]))
+	if from_state.is_empty():
 		return 0.0
-	return float(state.get("angle", 0.0))
+	var from_angle := float(from_state.get("angle", 0.0))
+	var data := survivor.get("task_data", {}) as Dictionary
+	var crossing_to := str(data.get("crossing_to_unit", ""))
+	if crossing_to == "":
+		return from_angle
+	var to_state := _get_unit_draw_state(crossing_to)
+	if to_state.is_empty():
+		return from_angle
+	return lerp_angle(from_angle, float(to_state.get("angle", from_angle)), clampf(float(data.get("crossing_progress", 0.0)), 0.0, 1.0))
 
 
 func _get_task_target_position(survivor: Dictionary) -> Vector2:
+	if str(survivor.get("task_stage", "")) == STAGE_ABOARD_ROUTE:
+		var data := survivor.get("task_data", {}) as Dictionary
+		var target_unit := str(data.get("target_unit", ""))
+		var target_local := data.get("target_local", Vector2.ZERO) as Vector2
+		if target_unit != "":
+			return _world_from_unit_local(target_unit, target_local)
+
 	var target := survivor.get("task_target_position", Vector2.INF) as Vector2
 	if target == Vector2.INF:
 		return target

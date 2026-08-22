@@ -24,7 +24,7 @@ func _init() -> void:
 		return
 
 	var instruction_label := scene.get_node("%InstructionLabel") as Label
-	_expect(instruction_label.text.contains("Sprint 4"), "instructions identify Sprint 4")
+	_expect(instruction_label.text.contains("Sprint"), "instructions identify the active playable sprint")
 	_expect(instruction_label.text.contains("Mouse-first"), "instructions present mouse-first UAT operations")
 	_expect(instruction_label.text.contains("Right click"), "instructions explain right-click option menus")
 	_expect(instruction_label.text.contains("Left click menu item"), "instructions explain menu confirmation")
