@@ -1,6 +1,6 @@
 # Current Sprint — Sprint 6A: Disposable Sector Lifecycle
 
-**Status:** IN PROGRESS — IMPLEMENTATION & VALIDATION
+**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (29/29)
 
 ## Hypothesis
 If the active train and crew can cross a deterministic sector exit, survive replacement of the entire sector-local world, and appear at the next sector's entry with persistent identities and state intact, then the game can support an irreversible journey through disposable generated sectors.
@@ -53,18 +53,18 @@ Do NOT implement in 6A:
 - minimap, loading screens, or endless sector generation.
 
 ## Automated Acceptance
-- [ ] Existing Sprint 1–5 regression suite remains green (28/28).
-- [ ] Run starts in deterministic Sector A with run seed and index 0.
-- [ ] Departure blocked if any survivor is in the yard.
-- [ ] Authoritative exit boundary crossing triggers transition once all survivors are aboard.
-- [ ] Sector A is disposed (`disposed == true`).
-- [ ] Sector B becomes active at index 1 with deterministic seed.
-- [ ] Persistent train/crew/needs/skills/jobs/broker state preserved intact.
-- [ ] Sector-local tasks/reservations from Sector A cancelled.
-- [ ] Sector B entry does not re-trigger transition (idempotent).
-- [ ] Run journal records transition details.
-- [ ] Debug state exposes sector lifecycle telemetry.
-- [ ] Full regression suite (Sprint 1–6A) passes 100%.
+- [x] Existing Sprint 1–5 regression suite remains green (28/28).
+- [x] Run starts in deterministic Sector A with run seed and index 0.
+- [x] Departure blocked if any survivor is in the yard.
+- [x] Authoritative exit boundary crossing triggers transition once all survivors are aboard.
+- [x] Sector A is disposed (`disposed == true`).
+- [x] Sector B becomes active at index 1 with deterministic seed.
+- [x] Persistent train/crew/needs/skills/jobs/broker state preserved intact.
+- [x] Sector-local tasks/reservations from Sector A cancelled.
+- [x] Sector B entry does not re-trigger transition (idempotent).
+- [x] Run journal records transition details.
+- [x] Debug state exposes sector lifecycle telemetry.
+- [x] Full regression suite (Sprint 1–6A) passes 100%.
 
 ## Human Playtest Gate
 - Launch project, confirm starting sector is Sector A.
