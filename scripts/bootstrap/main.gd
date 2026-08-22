@@ -4,6 +4,7 @@ const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const CrewSimulation := preload("res://scripts/crew/crew_simulation.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
 const TrainInterior := preload("res://scripts/colony/train_interior.gd")
+const TaskBroker := preload("res://scripts/colony/task_broker.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -71,6 +72,7 @@ var rail: RailMovement
 var crew: CrewSimulation
 var yard: YardOperations
 var interior: TrainInterior
+var task_broker: RefCounted
 var _throttle_up_held: bool = false
 var _throttle_down_held: bool = false
 var _brake_held: bool = false
@@ -88,6 +90,7 @@ func _ready() -> void:
 	yard = YardOperations.new(rail)
 	interior = TrainInterior.new(rail)
 	crew = CrewSimulation.new(rail, yard)
+	task_broker = TaskBroker.new(crew, yard, rail)
 	_refresh_instruction_text()
 	_layout_ui()
 	queue_redraw()
@@ -131,7 +134,8 @@ func get_compact_debug_lines() -> Array[String]:
 	if rail.direction < 0:
 		direction_label = "Rev"
 
-	lines.append("Objective: recover [W]")
+	var auto_label := "ON [V]" if task_broker != null and task_broker.enabled else "OFF [V]"
+	lines.append("Objective: recover [W]  Auto: %s" % auto_label)
 	var controlled_power := rail.get_controlled_power_unit_id()
 	lines.append("Consist: %s  Control: %s (%s)" % [
 		rail.get_consist_summary(),
@@ -467,6 +471,7 @@ func _process(delta: float) -> void:
 		rail.blocked_reason = missing_driver
 		yard.last_status = missing_driver
 	crew.step(delta)
+	task_broker.step(delta)
 	_refresh_instruction_text()
 	debug_label.text = "\n".join(get_compact_debug_lines())
 	queue_redraw()
@@ -558,6 +563,10 @@ func _input(event: InputEvent) -> void:
 		KEY_C:
 			if key_event.pressed:
 				crew.assign_couple_contact(crew.get_selected_survivor_id())
+		KEY_V:
+			if key_event.pressed and task_broker != null:
+				task_broker.enabled = not task_broker.enabled
+				yard.last_status = "Auto dispatch: %s" % ("ENABLED" if task_broker.enabled else "DISABLED")
 
 
 func _gui_input(event: InputEvent) -> void:

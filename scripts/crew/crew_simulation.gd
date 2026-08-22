@@ -157,6 +157,13 @@ func get_survivor_state(survivor_id: String) -> Dictionary:
 	return survivors[index].duplicate(true)
 
 
+func get_survivor_world_position(survivor_id: String) -> Vector2:
+	var index := _find_survivor_index(survivor_id)
+	if index < 0:
+		return Vector2.ZERO
+	return _get_survivor_world_position(survivors[index])
+
+
 func get_survivor_draw_states() -> Array[Dictionary]:
 	var states: Array[Dictionary] = []
 	for survivor in survivors:
