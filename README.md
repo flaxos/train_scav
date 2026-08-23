@@ -4,13 +4,15 @@ Top-down 2D Godot train-survival colony prototype.
 
 ## Active Sprint
 
-Sprint 4: Railway Operations Systems.
+Sprint 6B: Sector Clarity Stabilisation — complete after human UAT.
 
-Sprint 4 validates whether one yard can support multiple systemic salvage solutions. The same workshop wagon `W` can be recovered with manual crew-operated points or by repairing, boarding and using the local shunter `S`. Yard control and train-supplied power are present as repairable infrastructure, but remote point throwing is parked and rejected in the current UAT. Sprint 4 remains human-playtest pending until the GUI scenario is verified.
+Sprint 6B stabilises the disposable-sector lifecycle before Sprint 7 scavenging/resources. Sector 0 still contains the current railway-operations yard, but crossing the exit boundary should now read clearly as entering Sector 1 rather than resetting the same scene.
 
-The UAT scene keeps state/debug text in a right-side panel rather than over the railway playfield. Normal object operations are mouse-first: right-click the intended ground/object/anchor, then left-click a menu option to confirm. P2 is the workshop route point; P1 and damaged P3 remain available as diagnostics.
+The UAT scene keeps state/debug text in a right-side panel rather than over the railway playfield. Normal object operations are mouse-first: right-click the intended ground/object/anchor, then left-click a menu option to confirm. P2 is the workshop route point; P1 and damaged P3 remain available as diagnostics. P2 starts straight, which blocks the north workshop branch until a survivor operates it.
 
-The playable scene includes an in-game UAT guide in the side panel. Follow the checklist top to bottom while testing the demo slice. Interaction anchors now use simple prototype icons: switch levers for points, a wrench for repair targets, a power bolt for the yard power connection and a coupler/joint icon for uncoupling. Visual yard branches connect to the modeled rail or end at buffer stops so the map reads as a railyard rather than loose decorative track strokes.
+The playable scene includes an in-game Sprint 6B UAT guide in the side panel. Follow the checklist top to bottom while testing the demo slice. Interaction anchors use simple prototype icons: switch levers for points, a wrench for repair targets, a power bolt for the yard power connection and a coupler/joint icon for uncoupling. Visual yard branches connect to the modeled rail or end at buffer stops so the map reads as a railyard rather than loose decorative track strokes.
+
+Sector lifecycle note: after all survivors are aboard, drive east past P2 onto the visible main-exit track. The scene now hard-brakes and asks for confirmation before disposing the sector, including a summary of rolling stock left behind and placeholders for future supplies. Choosing No stops before the boundary and keeps the current sector; choosing Yes disposes Sector 0 and enters Sector 1. Reversing left in Sector 1 must stop at the main-line end; it must not return to Sector 0. Disembarking in Sector 1 should place survivors beside the active Sector 1 train.
 
 Shunter note: `S` starts damaged on the north workshop siding near the workshop wagon `W`. Repair `S`, board a survivor onto it, then explicitly select it as the controlled powered unit. Once repaired and crewed, it can move on that siding and can reverse back through the P2 connection toward the main line if the route is set.
 
@@ -49,6 +51,18 @@ Checked on 2026-08-17:
 ## Validation
 
 Use isolated Godot user/cache directories so validation does not depend on writable home-directory editor settings.
+
+Run the full current suite:
+
+```bash
+set -e
+for test_file in $(find tests -maxdepth 1 -name '*.gd' | sort); do
+  XDG_CONFIG_HOME=/tmp/train_scav_godot/config \
+  XDG_DATA_HOME=/tmp/train_scav_godot/data \
+  XDG_CACHE_HOME=/tmp/train_scav_godot/cache \
+  /home/flax/bin/godot --headless --path . --script "$test_file"
+done
+```
 
 Validate the project skeleton and launch the configured main scene headlessly:
 

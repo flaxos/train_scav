@@ -3,6 +3,7 @@ class_name RailMovement
 
 const SEGMENT_MAIN_WEST := "main_west"
 const SEGMENT_MAIN_EAST := "main_east"
+const SEGMENT_MAIN_EXIT := "main_exit"
 const SEGMENT_SIDING := "siding"
 const SEGMENT_SIDING_B := "siding_b"
 const SEGMENT_YARD_STORAGE := "yard_storage"
@@ -78,6 +79,7 @@ const _SHUNTER_CENTER_DISTANCE := 240.0
 const _SEGMENT_POINTS := {
 	SEGMENT_MAIN_WEST: [Vector2(160.0, 360.0), SWITCH_POSITION],
 	SEGMENT_MAIN_EAST: [SWITCH_POSITION, Vector2(1320.0, 360.0)],
+	SEGMENT_MAIN_EXIT: [Vector2(1320.0, 360.0), Vector2(1480.0, 360.0), Vector2(1760.0, 360.0)],
 	SEGMENT_SIDING_B: [
 		# P2 is a facing turnout from the eastbound main. The branch must
 		# continue generally east as it diverges north; a branch that turns
@@ -297,6 +299,8 @@ func is_yard_point_occupied(point_id: String) -> bool:
 			if segment_id == SEGMENT_MAIN_EAST:
 				if absf(get_segment_length(SEGMENT_MAIN_EAST) - segment_distance) <= clearance:
 					return true
+			elif segment_id == SEGMENT_MAIN_EXIT and segment_distance <= clearance:
+				return true
 			elif segment_id == SEGMENT_SIDING_B and segment_distance <= clearance:
 				return true
 
@@ -1081,6 +1085,8 @@ func _leave_endpoint_b() -> bool:
 	match current_segment:
 		SEGMENT_MAIN_EAST:
 			blocked_reason = "End of main line"
+		SEGMENT_MAIN_EXIT:
+			blocked_reason = "End of main line"
 		SEGMENT_SIDING_B:
 			blocked_reason = "End of workshop siding"
 		SEGMENT_YARD_STORAGE:
@@ -1159,6 +1165,8 @@ func _is_trailing_route_aligned(segment_id: String) -> bool:
 	match segment_id:
 		SEGMENT_MAIN_EAST:
 			return points_route == POINTS_MAIN
+		SEGMENT_MAIN_EXIT:
+			return get_yard_point_route("P2") == POINTS_MAIN
 		SEGMENT_SIDING:
 			return points_route == POINTS_SIDING
 		SEGMENT_SIDING_B:
@@ -1174,6 +1182,8 @@ func _get_trailing_route_block_reason(segment_id: String) -> String:
 	match segment_id:
 		SEGMENT_MAIN_EAST:
 			return "P1 route blocks main line"
+		SEGMENT_MAIN_EXIT:
+			return "P2 route blocks main line"
 		SEGMENT_SIDING:
 			return "P1 route blocks siding"
 		SEGMENT_SIDING_B:
@@ -1191,6 +1201,8 @@ func _get_previous_segment(segment_id: String) -> String:
 	# Keeping topology separate avoids using the live switch setting to redraw a
 	# consist that is already straddling an aligned turnout.
 	match segment_id:
+		SEGMENT_MAIN_EXIT:
+			return SEGMENT_MAIN_EAST
 		SEGMENT_MAIN_EAST, SEGMENT_SIDING:
 			return SEGMENT_MAIN_WEST
 		SEGMENT_SIDING_B:
@@ -1212,6 +1224,7 @@ func _get_next_segment(segment_id: String) -> String:
 		SEGMENT_MAIN_EAST:
 			if get_yard_point_route("P2") == POINTS_SIDING:
 				return SEGMENT_SIDING_B
+			return SEGMENT_MAIN_EXIT
 		SEGMENT_SIDING:
 			if get_yard_point_route("P3") == POINTS_SIDING:
 				return SEGMENT_YARD_REPAIR

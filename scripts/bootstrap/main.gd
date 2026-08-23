@@ -50,6 +50,10 @@ const MENU_BACKGROUND_COLOR := Color(0.12, 0.13, 0.145, 0.96)
 const MENU_BORDER_COLOR := Color(0.55, 0.58, 0.62, 1.0)
 const MENU_ITEM_COLOR := Color(0.17, 0.18, 0.20, 1.0)
 const MENU_TEXT_COLOR := Color(0.98, 0.98, 0.95, 1.0)
+const MODAL_BACKGROUND_COLOR := Color(0.06, 0.065, 0.075, 0.98)
+const MODAL_BUTTON_COLOR := Color(0.18, 0.20, 0.23, 1.0)
+const MODAL_CONFIRM_COLOR := Color(0.28, 0.62, 0.40, 1.0)
+const MODAL_CANCEL_COLOR := Color(0.72, 0.30, 0.24, 1.0)
 const ICON_BACKGROUND_COLOR := Color(0.92, 0.90, 0.84, 1.0)
 const ICON_STROKE_COLOR := Color(0.06, 0.065, 0.07, 1.0)
 const ICON_LABEL_COLOR := Color(0.96, 0.96, 0.92, 1.0)
@@ -61,7 +65,7 @@ const UI_MARGIN := 16.0
 const UI_PANEL_WIDTH := 360.0
 const UI_PANEL_GAP := 16.0
 const INSTRUCTION_PANEL_HEIGHT := 310.0
-const WORLD_BOUNDS := Rect2(Vector2(120.0, 250.0), Vector2(1580.0, 360.0))
+const WORLD_BOUNDS := Rect2(Vector2(120.0, 250.0), Vector2(1700.0, 360.0))
 const CONTEXT_MENU_WIDTH := 250.0
 const CONTEXT_MENU_ITEM_HEIGHT := 30.0
 const CONTEXT_MENU_HEADER_HEIGHT := 50.0
@@ -87,6 +91,8 @@ var context_menu_actor_id: String = ""
 var context_menu_actor_name: String = ""
 var context_menu_target_label: String = ""
 var survivor_selection_confirmed: bool = false
+var departure_confirmation_open: bool = false
+var departure_confirmation_lines: Array[String] = []
 
 
 func _ready() -> void:
@@ -142,8 +148,10 @@ func get_compact_debug_lines() -> Array[String]:
 		direction_label = "Rev"
 
 	var auto_label := "ON [V]" if task_broker != null and task_broker.enabled else "OFF [V]"
-	var sec_id: String = lifecycle.current_sector.definition.sector_id if (lifecycle != null and lifecycle.current_sector != null and lifecycle.current_sector.definition != null) else "sector_a"
-	lines.append("Sector: %s  Auto: %s" % [sec_id, auto_label])
+	var sector_visual := get_sector_visual_state()
+	var sec_id: String = str(sector_visual.get("sector_id", "sector_a"))
+	var sec_name: String = str(sector_visual.get("display_name", sec_id))
+	lines.append("Sector: %s  Auto: %s" % [sec_name, auto_label])
 	var controlled_power := rail.get_controlled_power_unit_id()
 	lines.append("Consist: %s  Control: %s (%s)" % [
 		rail.get_consist_summary(),
@@ -202,6 +210,32 @@ func get_sector_state() -> Dictionary:
 	return {}
 
 
+func get_sector_visual_state() -> Dictionary:
+	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
+		return {
+			"sector_id": "",
+			"template_name": "",
+			"sector_index": 0,
+			"display_name": "",
+			"entry_label": "",
+			"accent_color": Color(0.35, 0.95, 0.85, 0.9),
+		}
+
+	var def: SectorDefinition = lifecycle.current_sector.definition
+	return {
+		"sector_id": def.sector_id,
+		"template_name": def.template_name,
+		"sector_index": def.sector_index,
+		"display_name": def.display_name,
+		"entry_label": def.entry_label,
+		"accent_color": def.accent_color,
+		"entry_segment": def.entry_segment,
+		"entry_distance": def.entry_distance,
+		"exit_segment": def.exit_segment,
+		"exit_distance": def.exit_distance,
+	}
+
+
 func is_context_menu_open() -> bool:
 	return context_menu_open
 
@@ -223,6 +257,52 @@ func get_context_menu_actor_name() -> String:
 
 func get_context_menu_target_label() -> String:
 	return context_menu_target_label
+
+
+func is_departure_confirmation_open() -> bool:
+	return departure_confirmation_open
+
+
+func get_departure_confirmation_lines() -> Array[String]:
+	return departure_confirmation_lines.duplicate()
+
+
+func confirm_sector_departure() -> bool:
+	if not departure_confirmation_open or lifecycle == null:
+		return false
+	if not lifecycle.request_transition():
+		if yard != null:
+			yard.last_status = lifecycle.transition_blocked_reason
+		departure_confirmation_lines = _build_departure_confirmation_lines()
+		_hard_brake_before_exit(false)
+		return false
+
+	departure_confirmation_open = false
+	departure_confirmation_lines.clear()
+	rail = lifecycle.current_sector.rail
+	yard = lifecycle.current_sector.yard
+	interior = crew.interior
+	yard.last_status = "Entered %s" % lifecycle.current_sector.definition.display_name
+	_refresh_instruction_text()
+	if debug_label != null:
+		debug_label.text = "\n".join(get_compact_debug_lines())
+	queue_redraw()
+	return true
+
+
+func cancel_sector_departure() -> bool:
+	if not departure_confirmation_open:
+		return false
+	departure_confirmation_open = false
+	departure_confirmation_lines.clear()
+	_hard_brake_before_exit(true)
+	if yard != null:
+		yard.last_status = "Departure cancelled - train stopped before sector exit"
+	_refresh_instruction_text()
+	if debug_label != null:
+		debug_label.text = "\n".join(get_compact_debug_lines())
+	queue_redraw()
+	return true
 
 
 func get_context_menu_header_lines() -> Array[String]:
@@ -372,11 +452,11 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 					"kind": "straight",
 					"route": RailMovement.POINTS_MAIN,
 					"label": _format_route_option_label("straight", "MAIN", p2_active_kind == "straight"),
-					"target_segment": RailMovement.SEGMENT_MAIN_EAST,
+					"target_segment": RailMovement.SEGMENT_MAIN_EXIT,
 					"active": p2_active_kind == "straight",
 					"guide_start": p2_position + Vector2(-126.0, 8.0),
-					"guide_end": p2_position + Vector2(22.0, 8.0),
-					"label_position": p2_position + Vector2(-128.0, 20.0),
+					"guide_end": p2_position + Vector2(142.0, 8.0),
+					"label_position": p2_position + Vector2(44.0, 20.0),
 				},
 				{
 					"kind": "branch",
@@ -432,7 +512,8 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 5A UAT Guide",
+		"Train Scav - Sprint 6B UAT Guide",
+		"Sector 0 -> Sector 1 should be obvious.",
 		"Mouse-first operations",
 		"Left click survivor: select",
 		"Right click survivor: select + options",
@@ -444,6 +525,8 @@ func get_uat_tutorial_lines() -> Array[String]:
 		"Coupling and uncoupling are crew tasks.",
 		"Carriages now show cutaway prototype interiors.",
 		"Right click connected carriage: walk inside train.",
+		"P2 straight blocks the north workshop branch.",
+		"Operate P2 to reach the north workshop siding.",
 		"Switch labels show ACTIVE straight/branch.",
 	]
 	var steps := _get_uat_step_states()
@@ -470,36 +553,29 @@ func _process(delta: float) -> void:
 		return
 	var missing_driver := ""
 	var report_missing_driver := false
-	if not _controlled_power_has_crew():
+	if departure_confirmation_open:
+		_hard_brake_before_exit(false)
+	elif not _controlled_power_has_crew():
 		missing_driver = "No crew aboard %s" % rail.get_controlled_power_unit_id()
 		rail.set_throttle(0.0)
 		report_missing_driver = _throttle_up_held or _throttle_down_held or yard.last_status == missing_driver
 	elif yard.last_status.begins_with("No crew aboard "):
 		yard.last_status = ""
 
-	if _throttle_up_held and missing_driver == "":
+	if _throttle_up_held and missing_driver == "" and not departure_confirmation_open:
 		rail.adjust_throttle(delta * 0.65)
-	if _throttle_down_held and missing_driver == "":
+	if _throttle_down_held and missing_driver == "" and not departure_confirmation_open:
 		rail.adjust_throttle(-delta * 0.9)
 
-	rail.step(delta, _brake_held)
+	if not departure_confirmation_open:
+		rail.step(delta, _brake_held)
 	if report_missing_driver:
 		rail.blocked_reason = missing_driver
 		yard.last_status = missing_driver
 	crew.step(delta)
 	task_broker.step(delta)
-	if lifecycle != null:
-		var transitioned: bool = lifecycle.step()
-		if transitioned:
-			rail = lifecycle.current_sector.rail
-			yard = lifecycle.current_sector.yard
-			interior = crew.interior
-			yard.last_status = "Entered %s (%s)" % [
-				lifecycle.current_sector.definition.sector_id,
-				lifecycle.current_sector.definition.template_name
-			]
-		elif lifecycle.transition_blocked_reason != "":
-			yard.last_status = lifecycle.transition_blocked_reason
+	if lifecycle != null and not departure_confirmation_open:
+		_check_departure_boundary()
 	_refresh_instruction_text()
 	debug_label.text = "\n".join(get_compact_debug_lines())
 	queue_redraw()
@@ -511,6 +587,22 @@ func _input(event: InputEvent) -> void:
 
 	var key_event := event as InputEventKey
 	if key_event.echo:
+		return
+
+	if departure_confirmation_open:
+		match key_event.keycode:
+			KEY_W, KEY_UP:
+				if not key_event.pressed:
+					_throttle_up_held = false
+			KEY_S, KEY_DOWN:
+				if not key_event.pressed:
+					_throttle_down_held = false
+			KEY_ENTER, KEY_KP_ENTER, KEY_Y:
+				if key_event.pressed:
+					confirm_sector_departure()
+			KEY_ESCAPE, KEY_N:
+				if key_event.pressed:
+					cancel_sector_departure()
 		return
 
 	match key_event.keycode:
@@ -604,6 +696,10 @@ func _gui_input(event: InputEvent) -> void:
 	var mouse_event := event as InputEventMouseButton
 	if not mouse_event.pressed:
 		return
+	if departure_confirmation_open:
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_confirm_departure_modal_at(mouse_event.position)
+		return
 	if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 		if context_menu_open and _confirm_context_menu_at(mouse_event.position):
 			return
@@ -618,6 +714,7 @@ func _draw() -> void:
 	draw_rect(get_playfield_rect(), BACKGROUND_COLOR.lightened(0.02), true)
 	draw_set_transform(_get_world_draw_offset(), 0.0, Vector2(_get_world_draw_scale(), _get_world_draw_scale()))
 	_draw_track()
+	_draw_sector_entry()
 	_draw_sector_exit()
 	_draw_yard_auxiliary_tracks()
 	_draw_switch()
@@ -631,6 +728,7 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_ui_panels()
 	_draw_context_menu()
+	_draw_departure_confirmation()
 
 
 func _draw_sector_exit() -> void:
@@ -641,6 +739,17 @@ func _draw_sector_exit() -> void:
 	var exit_color := Color(0.95, 0.35, 0.35, 0.9) if lifecycle.transition_blocked_reason != "" else Color(0.35, 0.95, 0.85, 0.9)
 	draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), exit_color, 4.0)
 	draw_string(get_theme_default_font(), exit_pos + Vector2(-36.0, -38.0), "EXIT BOUNDARY", HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, exit_color)
+
+
+func _draw_sector_entry() -> void:
+	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
+		return
+	var def: SectorDefinition = lifecycle.current_sector.definition
+	var entry_pos: Vector2 = rail.get_point_on_segment(def.entry_segment, def.entry_distance)
+	var entry_color := def.accent_color
+	draw_line(entry_pos + Vector2(0.0, -26.0), entry_pos + Vector2(0.0, 26.0), entry_color, 3.0)
+	draw_circle(entry_pos + Vector2(0.0, -34.0), 6.0, entry_color)
+	draw_string(get_theme_default_font(), entry_pos + Vector2(-44.0, -46.0), def.entry_label, HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, entry_color)
 
 
 func _draw_track() -> void:
@@ -881,6 +990,63 @@ func _draw_context_menu() -> void:
 			14,
 			MENU_TEXT_COLOR
 		)
+
+
+func _draw_departure_confirmation() -> void:
+	if not departure_confirmation_open:
+		return
+
+	var font := get_theme_default_font()
+	if font == null:
+		return
+
+	var modal_rect := _get_departure_modal_rect()
+	draw_rect(modal_rect, MODAL_BACKGROUND_COLOR, true)
+	draw_rect(modal_rect, MENU_BORDER_COLOR, false, 2.0)
+
+	var title := "Confirm Sector Departure"
+	draw_string(
+		font,
+		modal_rect.position + Vector2(18.0, 30.0),
+		title,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		modal_rect.size.x - 36.0,
+		18,
+		MENU_TEXT_COLOR
+	)
+
+	var y := modal_rect.position.y + 62.0
+	for line in departure_confirmation_lines:
+		draw_string(
+			font,
+			Vector2(modal_rect.position.x + 18.0, y),
+			line,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			modal_rect.size.x - 36.0,
+			13,
+			MENU_TEXT_COLOR
+		)
+		y += 20.0
+
+	_draw_departure_button(_get_departure_confirm_rect(), "Yes - leave sector", MODAL_CONFIRM_COLOR)
+	_draw_departure_button(_get_departure_cancel_rect(), "No - hard brake", MODAL_CANCEL_COLOR)
+
+
+func _draw_departure_button(rect: Rect2, label: String, color: Color) -> void:
+	var font := get_theme_default_font()
+	if font == null:
+		return
+	draw_rect(rect, MODAL_BUTTON_COLOR, true)
+	draw_rect(rect, color, false, 2.0)
+	draw_string(
+		font,
+		rect.position + Vector2(12.0, 22.0),
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		rect.size.x - 24.0,
+		14,
+		MENU_TEXT_COLOR
+	)
 
 
 func _draw_locomotive() -> void:
@@ -1247,6 +1413,8 @@ func _get_track_color(segment_id: String) -> Color:
 	if segment_id == rail.current_segment:
 		return ROUTE_CURRENT_COLOR
 	if segment_id == RailMovement.SEGMENT_MAIN_EAST and rail.points_route == RailMovement.POINTS_MAIN:
+		return ROUTE_MAIN_COLOR
+	if segment_id == RailMovement.SEGMENT_MAIN_EXIT and rail.get_yard_point_route(YardOperations.POINT_P2) == RailMovement.POINTS_MAIN:
 		return ROUTE_MAIN_COLOR
 	if segment_id == RailMovement.SEGMENT_SIDING and rail.points_route == RailMovement.POINTS_SIDING:
 		return ROUTE_SIDING_COLOR
@@ -1657,6 +1825,32 @@ func _get_context_menu_size() -> Vector2:
 	)
 
 
+func _get_departure_modal_rect() -> Rect2:
+	var playfield := get_playfield_rect()
+	var modal_size := Vector2(minf(460.0, playfield.size.x - 48.0), 250.0)
+	return Rect2(playfield.position + (playfield.size - modal_size) * 0.5, modal_size)
+
+
+func _get_departure_confirm_rect() -> Rect2:
+	var modal := _get_departure_modal_rect()
+	var button_size := Vector2((modal.size.x - 54.0) * 0.5, 34.0)
+	return Rect2(Vector2(modal.position.x + 18.0, modal.end.y - 52.0), button_size)
+
+
+func _get_departure_cancel_rect() -> Rect2:
+	var modal := _get_departure_modal_rect()
+	var button_size := Vector2((modal.size.x - 54.0) * 0.5, 34.0)
+	return Rect2(Vector2(modal.position.x + 36.0 + button_size.x, modal.end.y - 52.0), button_size)
+
+
+func _confirm_departure_modal_at(screen_position: Vector2) -> bool:
+	if _get_departure_confirm_rect().has_point(screen_position):
+		return confirm_sector_departure()
+	if _get_departure_cancel_rect().has_point(screen_position):
+		return cancel_sector_departure()
+	return _get_departure_modal_rect().has_point(screen_position)
+
+
 func _clamp_context_menu_position(requested_position: Vector2) -> Vector2:
 	var playfield := get_playfield_rect()
 	var menu_size := _get_context_menu_size()
@@ -1763,6 +1957,65 @@ func _distance_to_line_segment(point: Vector2, start: Vector2, end: Vector2) -> 
 
 	var ratio := clampf((point - start).dot(segment) / length_squared, 0.0, 1.0)
 	return point.distance_to(start + segment * ratio)
+
+
+func _check_departure_boundary() -> void:
+	if lifecycle == null or lifecycle.current_sector == null:
+		return
+	if not lifecycle.current_sector.is_exit_crossed():
+		return
+
+	if not lifecycle.can_depart():
+		_hard_brake_before_exit(true)
+		if yard != null:
+			yard.last_status = lifecycle.transition_blocked_reason
+		return
+
+	_open_departure_confirmation()
+
+
+func _open_departure_confirmation() -> void:
+	departure_confirmation_open = true
+	departure_confirmation_lines = _build_departure_confirmation_lines()
+	_close_context_menu()
+	_hard_brake_before_exit(true)
+	if yard != null:
+		yard.last_status = "Confirm departure or cancel before sector disposal"
+
+
+func _build_departure_confirmation_lines() -> Array[String]:
+	var lines: Array[String] = []
+	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
+		return lines
+
+	var def: SectorDefinition = lifecycle.current_sector.definition
+	lines.append("Leave Sector %d?" % def.sector_index)
+	lines.append("This disposes the current yard and cannot be reversed.")
+	lines.append("Departing consist: %s" % rail.get_consist_summary())
+	lines.append("Rolling stock left behind: %s" % rail.get_detached_summary())
+	lines.append("Future supplies placeholder: food / parts / fuel left here.")
+	lines.append("Confirm to enter the next sector, or cancel to stop.")
+	return lines
+
+
+func _hard_brake_before_exit(clamp_before_boundary: bool) -> void:
+	if rail == null:
+		return
+
+	rail.set_throttle(0.0)
+	rail.speed = 0.0
+	rail.brake_active = true
+	_throttle_up_held = false
+	_throttle_down_held = false
+	if not clamp_before_boundary:
+		return
+	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
+		return
+
+	var def: SectorDefinition = lifecycle.current_sector.definition
+	if rail.current_segment != def.exit_segment:
+		return
+	rail.distance = minf(rail.distance, maxf(def.exit_distance - 1.0, 0.0))
 
 
 func _select_survivor_at(position: Vector2) -> bool:

@@ -89,3 +89,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-022 — Carriage interiors depend on physical consist topology
 **Decision:** Survivor onboard movement uses rolling-stock IDs and local carriage coordinates, and asks the railway domain which units belong to the same physical consist. Colony code does not duplicate or mutate consist topology. A survivor may cross only walkable adjacent vehicles in the current consist; uncoupling immediately invalidates routes across that joint.
 **Reason:** The train must remain one physical simulation. This allows crew to move while carriages translate/rotate on track, makes shunting materially affect colony accessibility, and prevents a future colony pathfinder from inventing connections that the railway no longer has.
+
+## D-023 — Sector departure is explicit forward disposal
+**Decision:** A sector transition is triggered only by forward movement across a visible eastbound exit track, then confirmed by the player before the disposable sector is destroyed. Cancelling departure hard-brakes the train before the boundary. The confirmation warns about detached rolling stock and reserves space for future supply/resource abandonment.
+**Reason:** Forward-only sectors should feel consequential and understandable; accidental reverse-side triggers or invisible disposal undermine trust in the run lifecycle.

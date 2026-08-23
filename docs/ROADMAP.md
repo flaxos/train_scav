@@ -124,7 +124,7 @@ Acceptance:
 > During travel/stops, survivors visibly satisfy basic jobs/needs and an engineer automatically responds to a relevant maintenance task according to priorities.
 
 ### Sprint 6 — Sector lifecycle
-**Current Active Increment:** Sprint 6A — Disposable Sector Lifecycle (uses two deterministic prototype sector templates: Sector A & Sector B; richer composition deferred to 6B if needed).
+**Status:** COMPLETE — Sprint 6B Sector Clarity Stabilisation has passed automated validation and human UAT.
 
 Build:
 - sector container;
@@ -136,7 +136,10 @@ Build:
 - initial deterministic template-composed sector lifecycle.
 
 Acceptance:
-> Train exits Sector A, Sector A is destroyed, Train state persists, and the train enters a newly generated Sector B. Returning to A is impossible.
+> Train drives forward onto a visible eastbound exit track, the player confirms sector disposal with clear left-behind-asset warnings, Sector A is destroyed, train state persists, and the train enters a newly generated Sector B. Returning to A is impossible.
+
+Sprint 6B acceptance:
+> Sector 1 no longer reads like a reset of Sector 0: the guide, debug state and entry marker identify the new sector, disembarking remains in the active sector, and reversing left cannot backtrack.
 
 ### Sprint 7 — Scavenging/resources
 Build:

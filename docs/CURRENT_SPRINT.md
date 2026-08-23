@@ -1,9 +1,9 @@
-# Current Sprint — Sprint 6A: Disposable Sector Lifecycle
+# Current Sprint — Sprint 6B: Sector Clarity Stabilisation
 
-**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (29/29)
+**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (30/30) — HUMAN PLAYTEST PASSED
 
 ## Hypothesis
-If the active train and crew can cross a deterministic sector exit, survive replacement of the entire sector-local world, and appear at the next sector's entry with persistent identities and state intact, then the game can support an irreversible journey through disposable generated sectors.
+If Sector 1 is visibly and mechanically distinct from Sector 0, then human testers can trust the disposable-sector lifecycle before Sprint 7 adds scavenging and resources.
 
 ## Architectural Ownership Rule
 **Sector state is disposable. Train and run state are persistent.**
@@ -20,16 +20,17 @@ A sector may reference the active train while present, but must NOT authoritativ
 Destroying or disposing a sector must not reconstruct the persistent colony from prototype defaults.
 
 ## In-Scope Behaviour
-1. Persistent run-level state (`RunState`) exists independently of disposable sector instances.
-2. Sector container (`SectorInstance`) manages sector ID, seed, sector index, entry/exit boundaries, sector-local rail/yard state, and active/disposed lifecycle state.
-3. The run starts in deterministic Sector A at sector index 0.
-4. Two deterministic prototype sector templates exist: Sector A (index 0) and Sector B (index 1+).
-5. Controlled train crossing Sector A's exit boundary requests a transition.
-6. Departure Safety Rule: All persistent survivors must be aboard the persistent train before sector disposal. If any survivor is in the yard, departure is blocked with a clear reason.
-7. Upon transition, persistent train/crew/broker state is retained, Sector A is disposed, Sector B is generated deterministically, and the train is placed on Sector B's entry rail position.
-8. Returning to Sector A is impossible.
-9. A run journal entry records departed sector ID, entered sector ID, destination seed, and consist order.
-10. Debug panel visibly exposes current sector ID, seed, sector index, transition count, previous-sector disposal state, and consist order.
+1. Preserve the Sprint 6A disposable-sector lifecycle exactly.
+2. Remove stale Sprint 4 / Sprint 5A labels from the README and playable guide.
+3. Make Sector B / Sector 1 visibly distinct from Sector A / Sector 0 through clear presentation metadata and entry marker text.
+4. Preserve the no-backtracking rule when reversing left after entering Sector 1.
+5. Confirm disembarking after the Sector 1 transition leaves survivors in the active sector, not at an old-sector origin.
+6. Clarify that P2 starts straight and therefore blocks the north workshop branch until a survivor operates it.
+7. Place the sector exit on a visible eastbound main-exit track beyond P2 so departure reads as leaving the yard rather than hitting an invisible trigger.
+8. Require forward train movement to cross the sector exit; reversing or sitting on an exit coordinate must not transition sectors.
+9. Add an explicit departure confirmation UI that lists left-behind rolling stock and future supply placeholders before sector disposal.
+10. If the player cancels departure, hard-brake the train before the boundary and keep the current sector active.
+11. Keep Sector 6B as deterministic hand-authored stabilisation, not procedural generation.
 
 ## Persistence Contract
 Preserve across transition:
@@ -43,8 +44,10 @@ Preserve across transition:
 ## Departure Safety Rule
 All persistent survivors must be aboard the departing persistent train (`SPATIAL_ABOARD`). If any survivor is in the yard (`SPATIAL_YARD`), block departure and expose a clear status message.
 
+Sector disposal is deliberate. The playable scene must stop at the forward exit boundary and ask for confirmation before calling the sector lifecycle transition. Cancelling departure stops the train before the boundary and must not dispose the current sector.
+
 ## Explicit Exclusions
-Do NOT implement in 6A:
+Do NOT implement in 6B:
 - disk save/load or full serialisation;
 - random terrain generation or procedural rail networks;
 - POIs, scavenging, expeditions, resources (diesel, food, parts);
@@ -53,28 +56,37 @@ Do NOT implement in 6A:
 - minimap, loading screens, or endless sector generation.
 
 ## Automated Acceptance
-- [x] Existing Sprint 1–5 regression suite remains green (28/28).
-- [x] Run starts in deterministic Sector A with run seed and index 0.
-- [x] Departure blocked if any survivor is in the yard.
-- [x] Authoritative exit boundary crossing triggers transition once all survivors are aboard.
-- [x] Sector A is disposed (`disposed == true`).
-- [x] Sector B becomes active at index 1 with deterministic seed.
-- [x] Persistent train/crew/needs/skills/jobs/broker state preserved intact.
-- [x] Sector-local tasks/reservations from Sector A cancelled.
-- [x] Sector B entry does not re-trigger transition (idempotent).
-- [x] Run journal records transition details.
-- [x] Debug state exposes sector lifecycle telemetry.
-- [x] Full regression suite (Sprint 1–6A) passes 100%.
+- [x] Existing Sprint 1–6A regression suite remains green.
+- [x] README names Sprint 6B as the active stabilisation increment.
+- [x] In-game guide names Sprint 6B and explains the Sector 0 -> Sector 1 UAT.
+- [x] Sector A and Sector B expose distinct display names, entry labels and accent colors.
+- [x] Sector B entry marker visibly names Sector 1.
+- [x] P2/north workshop branch guidance is explicit.
+- [x] Exit boundary is on a visible eastbound `main_exit` track beyond P2.
+- [x] Reversing or idling on the exit boundary cannot transition sectors.
+- [x] Forward exit opens a confirmation UI instead of immediately disposing the sector.
+- [x] Confirmation lists left-behind rolling stock and future supply placeholders.
+- [x] Cancelling departure hard-brakes before the exit and keeps the current sector.
+- [x] Disembarking after entering Sector 1 places the survivor near the Sector 1 train.
+- [x] Reversing left in Sector 1 cannot decrement the sector index or resurrect Sector A.
+- [x] Full regression suite (Sprint 1–6B) passes 100%.
 
 ## Human Playtest Gate
-- Launch project, confirm starting sector is Sector A.
-- Leave survivor in yard, drive to exit -> confirm departure blocked.
-- Board all survivors, drive across exit -> confirm environment transitions to Sector B.
-- Confirm persistent train and crew remain intact on Sector B entry track.
-- Confirm Sector A cannot be revisited.
+- [x] Launch project, confirm starting sector is Sector A.
+- [x] Leave survivor in yard, drive to exit -> confirm departure blocked.
+- [x] Board all survivors, drive east past P2 onto the visible main-exit track.
+- [x] Confirm the departure dialog lists detached rolling stock and future supply placeholders.
+- [x] Choose No -> confirm the train hard-brakes and remains in Sector 0.
+- [x] Drive east again and choose Yes -> confirm environment transitions to Sector B.
+- [x] Confirm persistent train and crew remain intact on Sector B entry track.
+- [x] Confirm the UI clearly reads as Sector 1 rather than a reset of Sector 0.
+- [x] Stop and disembark in Sector 1; survivor should appear near the active train.
+- [x] Reverse left in Sector 1; the train should stop at the main-line end rather than returning to Sector 0.
+- [x] Confirm P2 straight/branch explanation makes the north workshop route understandable.
+- [x] Confirm Sector A cannot be revisited.
 
 ## Definition of Done
-When all 30 automated acceptance checks pass, code is clean, documentation is reconciled, and git history has a focused commit for Sprint 6A.
+When all 30 automated test scripts pass, Sector 6B UAT guidance is clear, documentation is reconciled, and git history has a focused commit for Sprint 6B.
 
 ## Next Possible Increment
-Sprint 6B — Richer sector template composition and procedural track variety (if needed).
+Sprint 7 — Scavenging/resources.
