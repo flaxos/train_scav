@@ -30,6 +30,7 @@ Nothing below may be implemented merely because it appears promising.
 
 ## Train / colony
 - Multiple independent player trains.
+- Cargo manifests or survivor-carried inventory that persists aboard across sectors before formal deposit.
 - Large-scale utility networks across carriages.
 - Complex relationship simulation.
 - Children/generational simulation.

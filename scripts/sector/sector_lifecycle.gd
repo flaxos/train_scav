@@ -10,21 +10,27 @@ const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
 const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
+const TrainResources := preload("res://scripts/train/train_resources.gd")
 
 var run_state: RunState
 var current_sector: SectorInstance
 var previous_sector: SectorInstance
 var crew: RefCounted
 var task_broker: RefCounted
+var train_resources: TrainResources
 
 var is_transitioning: bool = false
 var transition_blocked_reason: String = ""
 
 
-func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCounted = null) -> void:
+func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCounted = null, resource_store: TrainResources = null) -> void:
 	run_state = RunState.new(initial_seed)
 	crew = crew_sim
 	task_broker = broker
+	if resource_store == null:
+		train_resources = TrainResources.new()
+	else:
+		train_resources = resource_store
 
 	var initial_def := SectorDefinition.create_for_index(run_state.run_seed, run_state.sector_index)
 	var rail_inst: RefCounted = null
@@ -34,6 +40,11 @@ func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCo
 		yard_inst = crew.yard
 
 	current_sector = SectorInstance.new(initial_def, rail_inst, yard_inst)
+	_link_scavenging_context()
+
+
+func get_train_resources() -> TrainResources:
+	return train_resources
 
 
 func can_depart() -> bool:
@@ -41,6 +52,12 @@ func can_depart() -> bool:
 	if crew != null and not crew.are_all_survivors_aboard():
 		var unboarded: Array[String] = crew.get_unboarded_survivor_names()
 		transition_blocked_reason = "Departure blocked: Survivor(s) in yard (%s)" % ", ".join(unboarded)
+		return false
+	if train_resources != null and not train_resources.can_afford(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
+		transition_blocked_reason = "Departure blocked: need %.0f diesel (have %.0f)" % [
+			TrainResources.DEPARTURE_DIESEL_COST,
+			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+		]
 		return false
 	return true
 
@@ -63,6 +80,14 @@ func request_transition() -> bool:
 		return false
 
 	is_transitioning = true
+	if train_resources != null:
+		if not train_resources.consume(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
+			transition_blocked_reason = "Departure blocked: need %.0f diesel (have %.0f)" % [
+				TrainResources.DEPARTURE_DIESEL_COST,
+				train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+			]
+			is_transitioning = false
+			return false
 
 	# 1. Snapshot persistent train & crew state from current sector
 	var old_sector := current_sector
@@ -99,6 +124,7 @@ func request_transition() -> bool:
 	# 6. Re-link crew simulation and task broker to new sector rail/yard
 	if crew != null:
 		crew.reset_for_new_sector(new_rail, new_yard)
+	_link_scavenging_context()
 	if task_broker != null:
 		task_broker.rail = new_rail
 		task_broker.yard = new_yard
@@ -134,6 +160,7 @@ func get_sector_state() -> Dictionary:
 		"previous_sector_disposed": prev_disposed,
 		"consist_order": consist,
 		"blocked_reason": transition_blocked_reason,
+		"resources": train_resources.get_all() if train_resources != null else {},
 	}
 
 
@@ -143,3 +170,10 @@ func get_sector_debug_lines() -> Array[String]:
 		"Sector: %s (%s)  Seed: %d  Idx: %d" % [st["sector_id"], st["template_name"], st["seed"], st["sector_index"]],
 		"Transitions: %d  Prev Disposed: %s" % [st["transition_count"], str(st["previous_sector_disposed"])],
 	]
+
+
+func _link_scavenging_context() -> void:
+	if crew == null or current_sector == null:
+		return
+	if crew.has_method("set_scavenging_context"):
+		crew.set_scavenging_context(current_sector.pois, train_resources)

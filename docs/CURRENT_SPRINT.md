@@ -1,92 +1,92 @@
-# Current Sprint — Sprint 6B: Sector Clarity Stabilisation
+# Current Sprint — Sprint 7: Scavenging / Resources
 
-**Status:** COMPLETE — ALL AUTOMATED TESTS PASSING (30/30) — HUMAN PLAYTEST PASSED
+**Status:** IMPLEMENTED FOR AUTOMATED VALIDATION — HUMAN PLAYTEST PENDING
 
 ## Hypothesis
-If Sector 1 is visibly and mechanically distinct from Sector 0, then human testers can trust the disposable-sector lifecycle before Sprint 7 adds scavenging and resources.
+Stopping the train becomes a meaningful strategic decision when useful resources exist outside the train, survivors must physically retrieve them, and time spent stopped has a real colony cost.
 
-## Architectural Ownership Rule
-**Sector state is disposable. Train and run state are persistent.**
+Core loop to prove:
 
-A sector may reference the active train while present, but must NOT authoritatively own:
-- rolling-stock identity;
-- physical consist identity and order;
-- coupler relationships;
-- controlled locomotive or power-unit identity;
-- survivor identity;
-- survivor needs, skills or jobs;
-- run seed, sector index or journal.
+TRAVEL -> STOP -> SELECT EXPEDITION -> LEAVE TRAIN -> SEARCH POI -> DISCOVER RESOURCE -> PICK UP / CARRY -> RETURN TO TRAIN -> DEPOSIT -> RETURN CREW -> DEPART SECTOR -> SUSTAIN THE TRAIN
 
-Destroying or disposing a sector must not reconstruct the persistent colony from prototype defaults.
+Roadmap acceptance:
+> The player must stop, search, retrieve a required resource, return the team, and depart to sustain the train.
+
+## Baseline Dependency
+Sprint 7 builds on the completed Sprint 6/6B sector lifecycle:
+- sector container and current-sector identity;
+- forward-only entry/exit transition;
+- persistent train and crew transfer;
+- old-sector disposal and no return;
+- deterministic next-sector creation;
+- run journal / transition metadata.
+
+Do not create a second sector lifecycle for scavenging.
 
 ## In-Scope Behaviour
-1. Preserve the Sprint 6A disposable-sector lifecycle exactly.
-2. Remove stale Sprint 4 / Sprint 5A labels from the README and playable guide.
-3. Make Sector B / Sector 1 visibly distinct from Sector A / Sector 0 through clear presentation metadata and entry marker text.
-4. Preserve the no-backtracking rule when reversing left after entering Sector 1.
-5. Confirm disembarking after the Sector 1 transition leaves survivors in the active sector, not at an old-sector origin.
-6. Clarify that P2 starts straight and therefore blocks the north workshop branch until a survivor operates it.
-7. Place the sector exit on a visible eastbound main-exit track beyond P2 so departure reads as leaving the yard rather than hitting an invisible trigger.
-8. Require forward train movement to cross the sector exit; reversing or sitting on an exit coordinate must not transition sectors.
-9. Add an explicit departure confirmation UI that lists left-behind rolling stock and future supply placeholders before sector disposal.
-10. If the player cancels departure, hard-brake the train before the boundary and keep the current sector active.
-11. Keep Sector 6B as deterministic hand-authored stabilisation, not procedural generation.
+1. Add a train-level stockpile containing `DIESEL`, `FOOD`, and `PARTS`.
+2. Add deterministic sector-local POIs: fuel depot, maintenance shed, and supply store.
+3. Allow a selected survivor to search a POI through the existing physical crew task system.
+4. Searching reveals deterministic loot at the POI but does not add it to the train.
+5. Allow a survivor to physically pick up discovered loot and haul it to the train storage/deposit point.
+6. Deposit transfers ownership into the train stockpile and clears carried cargo.
+7. Sector elapsed time advances while stopped/searching; survivor needs continue updating.
+8. Departing a sector requires and consumes a fixed diesel amount.
+9. Departure is blocked if diesel is insufficient.
+10. Departure is blocked while any expedition survivor is outside the train.
+11. The playable scene exposes resources, POI state, survivor task/cargo state, and departure feedback through the existing side UI and right-click menu pattern.
 
-## Persistence Contract
-Preserve across transition:
-- rolling-stock IDs and physical consist order;
-- coupler relationships;
-- controlled locomotive/power-unit ID;
-- survivor IDs, host-carriage IDs, health, hunger, rest values, skills, and jobs;
-- automatic task-dispatch enabled/disabled preference;
-- run seed, sector index, and run journal.
+## Authority Rules
+- **Train/colony owns stockpiled resources** after deposit.
+- **Sector/world owns POIs, searched state, uncollected loot, and elapsed sector time.**
+- **Crew owns survivor position, tasks, and carried cargo.**
+- **Sprint 6 lifecycle owns departure, old-sector disposal, persistent transfer, and next-sector creation.**
 
-## Departure Safety Rule
-All persistent survivors must be aboard the departing persistent train (`SPATIAL_ABOARD`). If any survivor is in the yard (`SPATIAL_YARD`), block departure and expose a clear status message.
-
-Sector disposal is deliberate. The playable scene must stop at the forward exit boundary and ask for confirmation before calling the sector lifecycle transition. Cancelling departure stops the train before the boundary and must not dispose the current sector.
+Searching discovers resources. Deposit transfers resources. No code path may add POI loot directly to the train without physical hauling.
 
 ## Explicit Exclusions
-Do NOT implement in 6B:
-- disk save/load or full serialisation;
-- random terrain generation or procedural rail networks;
-- POIs, scavenging, expeditions, resources (diesel, food, parts);
-- combat, threats, factions, weather;
-- multiple simultaneously loaded sectors or backtracking;
-- minimap, loading screens, or endless sector generation.
+Do NOT implement in Sprint 7:
+- combat, enemies, weapons, stealth, or random encounters;
+- procedural towns/cities or deep loot tables;
+- detailed inventory, weight, backpacks, or equipment;
+- crafting, recipes, farming, trading, factions, economy;
+- temperature/weather survival;
+- new railway mechanics or multiple independent trains;
+- save/load;
+- final art or audio polish.
 
 ## Automated Acceptance
-- [x] Existing Sprint 1–6A regression suite remains green.
-- [x] README names Sprint 6B as the active stabilisation increment.
-- [x] In-game guide names Sprint 6B and explains the Sector 0 -> Sector 1 UAT.
-- [x] Sector A and Sector B expose distinct display names, entry labels and accent colors.
-- [x] Sector B entry marker visibly names Sector 1.
-- [x] P2/north workshop branch guidance is explicit.
-- [x] Exit boundary is on a visible eastbound `main_exit` track beyond P2.
-- [x] Reversing or idling on the exit boundary cannot transition sectors.
-- [x] Forward exit opens a confirmation UI instead of immediately disposing the sector.
-- [x] Confirmation lists left-behind rolling stock and future supply placeholders.
-- [x] Cancelling departure hard-brakes before the exit and keeps the current sector.
-- [x] Disembarking after entering Sector 1 places the survivor near the Sector 1 train.
-- [x] Reversing left in Sector 1 cannot decrement the sector index or resurrect Sector A.
-- [x] Full regression suite (Sprint 1–6B) passes 100%.
+- [x] Resource store supports diesel/food/parts, add, consume, affordability, and non-negative clamping.
+- [x] Active sector exposes deterministic POIs with stable state and one-time search yields.
+- [x] Search requires a valid survivor task and completes only after physical arrival/interact time.
+- [x] Scavenging skill affects search speed without making the Scavenger role mandatory.
+- [x] Search discovers loot without changing train resources.
+- [x] Hauling transfers loot from POI to survivor, then from survivor to train only on deposit.
+- [x] Sector elapsed time and survivor needs advance during stopped expedition time.
+- [x] Insufficient diesel blocks departure.
+- [x] Outside crew blocks departure.
+- [x] Hauled diesel can satisfy departure.
+- [x] Successful departure consumes diesel and preserves Sprint 6 sector disposal/transfer semantics.
+- [x] Existing Sprint 1-6 regression tests must remain green.
 
 ## Human Playtest Gate
-- [x] Launch project, confirm starting sector is Sector A.
-- [x] Leave survivor in yard, drive to exit -> confirm departure blocked.
-- [x] Board all survivors, drive east past P2 onto the visible main-exit track.
-- [x] Confirm the departure dialog lists detached rolling stock and future supply placeholders.
-- [x] Choose No -> confirm the train hard-brakes and remains in Sector 0.
-- [x] Drive east again and choose Yes -> confirm environment transitions to Sector B.
-- [x] Confirm persistent train and crew remain intact on Sector B entry track.
-- [x] Confirm the UI clearly reads as Sector 1 rather than a reset of Sector 0.
-- [x] Stop and disembark in Sector 1; survivor should appear near the active train.
-- [x] Reverse left in Sector 1; the train should stop at the main-line end rather than returning to Sector 0.
-- [x] Confirm P2 straight/branch explanation makes the north workshop route understandable.
-- [x] Confirm Sector A cannot be revisited.
+Sprint 7 is not complete until the following is verified in the Godot GUI:
+1. Start in Sector 0 with insufficient diesel to depart.
+2. Attempt departure and confirm it is blocked by diesel.
+3. Select Nia or another survivor.
+4. Right-click Fuel Depot and assign Search.
+5. Watch the survivor leave the train and walk to the POI.
+6. Confirm search takes time and reveals diesel at the POI.
+7. Confirm train diesel has not changed yet.
+8. Right-click Fuel Depot and assign Haul.
+9. Watch the survivor carry diesel back to B storage.
+10. Confirm deposit increases train diesel and clears survivor cargo.
+11. Board all outside expedition crew.
+12. Depart the sector and confirm diesel is consumed.
+13. Confirm the persistent train enters the next sector and the old sector is unavailable.
 
 ## Definition of Done
-When all 30 automated test scripts pass, Sector 6B UAT guidance is clear, documentation is reconciled, and git history has a focused commit for Sprint 6B.
+Sprint 7 is complete only after automated validation passes and the human playtest gate above is accepted by the user.
 
 ## Next Possible Increment
-Sprint 7 — Scavenging/resources.
+Sprint 8 — first vertical slice.

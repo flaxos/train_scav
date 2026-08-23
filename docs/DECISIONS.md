@@ -93,3 +93,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-023 — Sector departure is explicit forward disposal
 **Decision:** A sector transition is triggered only by forward movement across a visible eastbound exit track, then confirmed by the player before the disposable sector is destroyed. Cancelling departure hard-brakes the train before the boundary. The confirmation warns about detached rolling stock and reserves space for future supply/resource abandonment.
 **Reason:** Forward-only sectors should feel consequential and understandable; accidental reverse-side triggers or invisible disposal undermine trust in the run lifecycle.
+
+## D-024 — Scavenging ownership is physical
+**Decision:** Sprint 7 separates resource ownership by domain. Sector POIs own searched state and uncollected loot; survivors own carried cargo; the train owns deposited diesel/food/parts. Searching reveals resources but never adds them to the train. Deposit at the train storage point transfers carried cargo into the train stockpile. Sector departure requires and consumes train diesel, and cannot strand survivors outside the train.
+**Reason:** The stop/search/haul/depart loop only proves the hypothesis if useful supplies remain physically outside the train until people retrieve them. The Sprint 6 lifecycle remains the sole authority for irreversible sector departure and disposal.

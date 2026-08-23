@@ -142,6 +142,8 @@ Sprint 6B acceptance:
 > Sector 1 no longer reads like a reset of Sector 0: the guide, debug state and entry marker identify the new sector, disembarking remains in the active sector, and reversing left cannot backtrack.
 
 ### Sprint 7 — Scavenging/resources
+**Status:** ACTIVE — automated implementation ready; human playtest pending.
+
 Build:
 - local POIs;
 - expedition selection;

@@ -64,6 +64,8 @@ func test_departure_safety_and_transition() -> void:
 	# Drive train to exit boundary
 	rail.current_segment = sec_a.definition.exit_segment
 	rail.distance = sec_a.definition.exit_distance + 10.0
+	rail.direction = 1
+	rail.speed = 20.0
 
 	# Stepping lifecycle when survivor is in yard MUST block transition
 	var transitioned := lifecycle.step()
@@ -78,6 +80,8 @@ func test_departure_safety_and_transition() -> void:
 	crew.survivors[0]["host_unit"] = "L"
 
 	# Now step lifecycle -> transition MUST succeed
+	rail.direction = 1
+	rail.speed = 20.0
 	transitioned = lifecycle.step()
 	_expect(transitioned, "Transition succeeds after all survivors are aboard")
 

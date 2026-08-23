@@ -31,6 +31,7 @@ const _TASK_SKILLS := {
 	"operate_yard_point": SKILL_RAILWAY,
 	"uncouple": SKILL_RAILWAY,
 	"couple": SKILL_RAILWAY,
+	"search_poi": SKILL_SCAVENGING,
 }
 
 # Job -> eligible task categories.

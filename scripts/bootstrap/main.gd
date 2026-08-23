@@ -8,6 +8,7 @@ const TaskBroker := preload("res://scripts/colony/task_broker.gd")
 const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
 const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const SectorLifecycle := preload("res://scripts/sector/sector_lifecycle.gd")
+const TrainResources := preload("res://scripts/train/train_resources.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -43,6 +44,10 @@ const JOINT_ANCHOR_COLOR := Color(0.56, 0.85, 0.48, 1.0)
 const RESERVED_ANCHOR_COLOR := Color(1.0, 0.25, 0.22, 1.0)
 const REPAIR_ANCHOR_COLOR := Color(0.74, 0.54, 1.0, 1.0)
 const POWER_ANCHOR_COLOR := Color(0.35, 0.95, 0.72, 1.0)
+const POI_FUEL_COLOR := Color(0.92, 0.54, 0.22, 1.0)
+const POI_PARTS_COLOR := Color(0.58, 0.70, 0.86, 1.0)
+const POI_FOOD_COLOR := Color(0.44, 0.78, 0.42, 1.0)
+const CARGO_COLOR := Color(0.98, 0.82, 0.24, 1.0)
 const PANEL_BACKGROUND_COLOR := Color(0.075, 0.083, 0.095, 1.0)
 const PANEL_BORDER_COLOR := Color(0.23, 0.25, 0.28, 1.0)
 const PANEL_SECTION_COLOR := Color(0.105, 0.115, 0.13, 1.0)
@@ -71,6 +76,7 @@ const CONTEXT_MENU_ITEM_HEIGHT := 30.0
 const CONTEXT_MENU_HEADER_HEIGHT := 50.0
 const CONTEXT_MENU_PADDING := 8.0
 const CONTEXT_TARGET_RADIUS := 56.0
+const UI_REFRESH_INTERVAL := 0.12
 
 @onready var instruction_label: Label = %InstructionLabel
 @onready var debug_label: Label = %DebugLabel
@@ -81,6 +87,7 @@ var yard: YardOperations
 var interior: TrainInterior
 var task_broker: RefCounted
 var lifecycle: RefCounted
+var train_resources: TrainResources
 var _throttle_up_held: bool = false
 var _throttle_down_held: bool = false
 var _brake_held: bool = false
@@ -93,6 +100,8 @@ var context_menu_target_label: String = ""
 var survivor_selection_confirmed: bool = false
 var departure_confirmation_open: bool = false
 var departure_confirmation_lines: Array[String] = []
+var _ui_refresh_elapsed: float = 0.0
+var _ui_panel_refresh_count: int = 0
 
 
 func _ready() -> void:
@@ -102,7 +111,11 @@ func _ready() -> void:
 	crew = CrewSimulation.new(rail, yard)
 	task_broker = TaskBroker.new(crew, yard, rail)
 	lifecycle = SectorLifecycle.new(12345, crew, task_broker)
-	_refresh_instruction_text()
+	train_resources = lifecycle.get_train_resources()
+	train_resources.set_amount(TrainResources.RESOURCE_DIESEL, 6.0)
+	train_resources.set_amount(TrainResources.RESOURCE_FOOD, 12.0)
+	train_resources.set_amount(TrainResources.RESOURCE_PARTS, 0.0)
+	_refresh_side_panel_text(true)
 	_layout_ui()
 	queue_redraw()
 
@@ -151,7 +164,17 @@ func get_compact_debug_lines() -> Array[String]:
 	var sector_visual := get_sector_visual_state()
 	var sec_id: String = str(sector_visual.get("sector_id", "sector_a"))
 	var sec_name: String = str(sector_visual.get("display_name", sec_id))
-	lines.append("Sector: %s  Auto: %s" % [sec_name, auto_label])
+	var elapsed_time := 0.0
+	if lifecycle != null and lifecycle.current_sector != null:
+		elapsed_time = lifecycle.current_sector.get_elapsed_time()
+	var stock := "D0 F0 P0"
+	if train_resources != null:
+		stock = "D%.0f F%.0f P%.0f" % [
+			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+			train_resources.get_amount(TrainResources.RESOURCE_FOOD),
+			train_resources.get_amount(TrainResources.RESOURCE_PARTS),
+		]
+	lines.append("Sector: %s  Time: %.0fs  Stock: %s  Auto: %s" % [sec_name, elapsed_time, stock, auto_label])
 	var controlled_power := rail.get_controlled_power_unit_id()
 	lines.append("Consist: %s  Control: %s (%s)" % [
 		rail.get_consist_summary(),
@@ -192,9 +215,16 @@ func get_compact_debug_lines() -> Array[String]:
 			crew_location,
 			str(selected.get("task_status", "")),
 		])
-		lines.append("Task: %s  target %s" % [
+		var cargo_label := "none"
+		if float(selected.get("cargo_amount", 0.0)) > 0.0:
+			cargo_label = "%.0f %s" % [
+				float(selected.get("cargo_amount", 0.0)),
+				str(selected.get("cargo_type", "")),
+			]
+		lines.append("Task: %s  target %s  Cargo: %s" % [
 			str(selected.get("task_type", "")),
 			str(selected.get("task_target", "")),
+			cargo_label,
 		])
 		lines.append("Needs: %s" % crew.needs.get_debug_summary(crew.get_selected_survivor_id()))
 
@@ -234,6 +264,47 @@ func get_sector_visual_state() -> Dictionary:
 		"exit_segment": def.exit_segment,
 		"exit_distance": def.exit_distance,
 	}
+
+
+func get_train_resource_state() -> Dictionary:
+	if train_resources == null:
+		return {}
+	var state: Dictionary = train_resources.get_all()
+	state["departure_cost"] = TrainResources.DEPARTURE_DIESEL_COST
+	return state
+
+
+func get_ui_panel_refresh_count() -> int:
+	return _ui_panel_refresh_count
+
+
+func get_ui_refresh_interval() -> float:
+	return UI_REFRESH_INTERVAL
+
+
+func get_sector_poi_states() -> Array[Dictionary]:
+	if lifecycle == null or lifecycle.current_sector == null:
+		return []
+	return lifecycle.current_sector.get_poi_states()
+
+
+func get_sector_poi_state(poi_id: String) -> Dictionary:
+	if lifecycle == null or lifecycle.current_sector == null:
+		return {}
+	return lifecycle.current_sector.get_poi_state(poi_id)
+
+
+func get_poi_draw_states() -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	for poi in get_sector_poi_states():
+		var resource_type := str(poi.get("yield_type", ""))
+		if bool(poi.get("searched", false)) and str(poi.get("available_type", "")) != "":
+			resource_type = str(poi.get("available_type", ""))
+		var draw_state: Dictionary = poi.duplicate(true)
+		draw_state["icon"] = _get_poi_icon_kind(resource_type)
+		draw_state["color"] = _get_poi_color(resource_type)
+		states.append(draw_state)
+	return states
 
 
 func is_context_menu_open() -> bool:
@@ -281,11 +352,10 @@ func confirm_sector_departure() -> bool:
 	departure_confirmation_lines.clear()
 	rail = lifecycle.current_sector.rail
 	yard = lifecycle.current_sector.yard
+	train_resources = lifecycle.get_train_resources()
 	interior = crew.interior
 	yard.last_status = "Entered %s" % lifecycle.current_sector.definition.display_name
-	_refresh_instruction_text()
-	if debug_label != null:
-		debug_label.text = "\n".join(get_compact_debug_lines())
+	_refresh_side_panel_text(true)
 	queue_redraw()
 	return true
 
@@ -298,9 +368,7 @@ func cancel_sector_departure() -> bool:
 	_hard_brake_before_exit(true)
 	if yard != null:
 		yard.last_status = "Departure cancelled - train stopped before sector exit"
-	_refresh_instruction_text()
-	if debug_label != null:
-		debug_label.text = "\n".join(get_compact_debug_lines())
+	_refresh_side_panel_text(true)
 	queue_redraw()
 	return true
 
@@ -512,22 +580,17 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 6B UAT Guide",
-		"Sector 0 -> Sector 1 should be obvious.",
+		"Train Scav - Sprint 7 UAT Guide",
+		"Goal: scavenge diesel, return crew, depart.",
 		"Mouse-first operations",
 		"Left click survivor: select",
-		"Right click survivor: select + options",
-		"Right click object: options for selected crew",
+		"Right click POI/train: options",
 		"Left click menu item: confirm",
 		"Drive remains keyboard: W/S Space R",
+		"Start diesel is short: departure should fail.",
+		"Search discovers loot; hauling deposits it.",
+		"Departure requires all crew aboard.",
 		"S starts damaged; repair before control.",
-		"A survivor must be aboard L or S to drive.",
-		"Coupling and uncoupling are crew tasks.",
-		"Carriages now show cutaway prototype interiors.",
-		"Right click connected carriage: walk inside train.",
-		"P2 straight blocks the north workshop branch.",
-		"Operate P2 to reach the north workshop siding.",
-		"Switch labels show ACTIVE straight/branch.",
 	]
 	var steps := _get_uat_step_states()
 	var current_step := get_current_uat_step_index()
@@ -569,6 +632,8 @@ func _process(delta: float) -> void:
 
 	if not departure_confirmation_open:
 		rail.step(delta, _brake_held)
+	if lifecycle != null and lifecycle.current_sector != null and not lifecycle.current_sector.disposed:
+		lifecycle.current_sector.step(delta)
 	if report_missing_driver:
 		rail.blocked_reason = missing_driver
 		yard.last_status = missing_driver
@@ -576,8 +641,7 @@ func _process(delta: float) -> void:
 	task_broker.step(delta)
 	if lifecycle != null and not departure_confirmation_open:
 		_check_departure_boundary()
-	_refresh_instruction_text()
-	debug_label.text = "\n".join(get_compact_debug_lines())
+	_step_side_panel_refresh(delta)
 	queue_redraw()
 
 
@@ -718,6 +782,7 @@ func _draw() -> void:
 	_draw_sector_exit()
 	_draw_yard_auxiliary_tracks()
 	_draw_switch()
+	_draw_sector_pois()
 	_draw_coupling_zones()
 	_draw_rolling_stock()
 	_draw_train_interiors()
@@ -1225,6 +1290,49 @@ func _draw_unit_label(state: Dictionary) -> void:
 	draw_string(font, pos + Vector2(-7.0, 6.0), unit_id, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16, UNIT_LABEL_COLOR)
 
 
+func _draw_sector_pois() -> void:
+	var font := get_theme_default_font()
+	for state in get_poi_draw_states():
+		var position := state.get("position", Vector2.ZERO) as Vector2
+		var color := state.get("color", POI_PARTS_COLOR) as Color
+		var icon := str(state.get("icon", "crate"))
+		_draw_poi_icon(position, icon, color, bool(state.get("searched", false)))
+		if font == null:
+			continue
+		var name := str(state.get("name", "POI"))
+		var status := str(state.get("status", ""))
+		var amount := float(state.get("available_amount", 0.0))
+		var available_type := str(state.get("available_type", ""))
+		var line := "%s - %s" % [name, status]
+		if amount > 0.0:
+			line = "%s: %.0f %s" % [name, amount, available_type]
+		draw_string(font, position + Vector2(20.0, -12.0), line, HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, ICON_LABEL_COLOR)
+
+
+func _draw_poi_icon(position: Vector2, icon: String, color: Color, searched: bool) -> void:
+	var bg := Color(0.12, 0.13, 0.14, 1.0)
+	if searched:
+		bg = bg.lightened(0.08)
+	draw_rect(Rect2(position - Vector2(16.0, 16.0), Vector2(32.0, 32.0)), bg, true)
+	draw_rect(Rect2(position - Vector2(16.0, 16.0), Vector2(32.0, 32.0)), color, false, 2.0)
+	match icon:
+		"fuel":
+			draw_circle(position + Vector2(-4.0, 2.0), 7.0, color)
+			draw_rect(Rect2(position + Vector2(-6.0, -9.0), Vector2(8.0, 5.0)), color, true)
+			draw_line(position + Vector2(5.0, -6.0), position + Vector2(10.0, -1.0), color, 2.0, true)
+			draw_line(position + Vector2(10.0, -1.0), position + Vector2(10.0, 8.0), color, 2.0, true)
+		"food":
+			draw_circle(position + Vector2(-4.0, 0.0), 6.0, color)
+			draw_line(position + Vector2(4.0, -8.0), position + Vector2(4.0, 9.0), color, 2.0, true)
+			draw_line(position + Vector2(8.0, -8.0), position + Vector2(8.0, 9.0), color, 2.0, true)
+		_:
+			draw_rect(Rect2(position - Vector2(8.0, 6.0), Vector2(16.0, 8.0)), color, true)
+			draw_line(position + Vector2(-8.0, 6.0), position + Vector2(0.0, -8.0), color, 2.0, true)
+			draw_line(position + Vector2(8.0, 6.0), position + Vector2(0.0, -8.0), color, 2.0, true)
+	if searched:
+		draw_line(position + Vector2(-11.0, 11.0), position + Vector2(11.0, -11.0), Color(1.0, 1.0, 1.0, 0.55), 2.0, true)
+
+
 func _draw_crew_interaction_anchors() -> void:
 	for state in get_anchor_icon_states():
 		var position := state.get("position", Vector2.ZERO) as Vector2
@@ -1263,6 +1371,9 @@ func _draw_survivor(state: Dictionary, font: Font) -> void:
 	if selected:
 		draw_circle(position, 17.0, SURVIVOR_SELECTED_HALO_COLOR)
 		draw_arc(position, 15.0, 0.0, TAU, 28, SURVIVOR_SELECTED_COLOR, 3.0)
+	if float(state.get("cargo_amount", 0.0)) > 0.0:
+		draw_rect(Rect2(position + Vector2(7.0, 3.0), Vector2(9.0, 9.0)), CARGO_COLOR, true)
+		draw_rect(Rect2(position + Vector2(7.0, 3.0), Vector2(9.0, 9.0)), ICON_STROKE_COLOR, false, 1.0)
 
 	if font != null:
 		var name := str(state.get("name", "?"))
@@ -1436,41 +1547,73 @@ func _format_route_option_label(kind: String, destination: String, active: bool)
 	return "%s: %s" % [prefix, destination]
 
 
-func _refresh_instruction_text() -> void:
-	if instruction_label == null:
+func _step_side_panel_refresh(delta: float) -> void:
+	_ui_refresh_elapsed += delta
+	if _ui_refresh_elapsed < UI_REFRESH_INTERVAL:
 		return
-	instruction_label.text = "\n".join(get_uat_tutorial_lines())
+	_refresh_side_panel_text(false)
+
+
+func _refresh_side_panel_text(force: bool = false) -> void:
+	if not force and _ui_refresh_elapsed < UI_REFRESH_INTERVAL:
+		return
+	_ui_refresh_elapsed = 0.0
+	_ui_panel_refresh_count += 1
+
+	if instruction_label != null:
+		var instruction_text := "\n".join(get_uat_tutorial_lines())
+		if force or instruction_label.text != instruction_text:
+			instruction_label.text = instruction_text
+
+	if debug_label != null:
+		var debug_text := "\n".join(get_compact_debug_lines())
+		if force or debug_label.text != debug_text:
+			debug_label.text = debug_text
+
+
+func _refresh_instruction_text() -> void:
+	_refresh_side_panel_text(true)
 
 
 func _get_uat_step_states() -> Array[Dictionary]:
+	var fuel: Dictionary = get_sector_poi_state("fuel_depot")
+	var fuel_searched := bool(fuel.get("searched", false))
+	var fuel_available := float(fuel.get("available_amount", 0.0))
+	var diesel_amount := 0.0
+	if train_resources != null:
+		diesel_amount = train_resources.get_amount(TrainResources.RESOURCE_DIESEL)
 	return [
 		{
-			"label": "Select a survivor",
+			"label": "Attempt exit: blocked by diesel",
+			"done": lifecycle != null and str(lifecycle.transition_blocked_reason).contains("diesel"),
+		},
+		{
+			"label": "Select Nia or another survivor",
 			"done": survivor_selection_confirmed,
 		},
 		{
-			"label": "Right click P2 -> Operate P2",
-			"done": rail.get_yard_point_route(YardOperations.POINT_P2) == RailMovement.POINTS_SIDING,
+			"label": "Right click Fuel Depot -> Search",
+			"done": fuel_searched,
 		},
 		{
-			"label": "Drive to W contact",
-			"done": rail.get_active_consist_ids().has("W") or not rail.get_last_contact_anchor().is_empty(),
+			"label": "Diesel discovered, not in train yet",
+			"done": fuel_available > 0.0 and diesel_amount < TrainResources.DEPARTURE_DIESEL_COST,
 		},
 		{
-			"label": "Right click W -> crew coupling",
-			"done": rail.get_active_consist_ids().has("W"),
+			"label": "Right click Fuel Depot -> Haul diesel",
+			"done": diesel_amount >= 14.0 or fuel_available <= 0.0 and fuel_searched,
 		},
 		{
-			"label": "Repair shunter S",
-			"done": rail.get_powered_unit_condition("S") == RailMovement.CONDITION_OPERATIONAL,
+			"label": "Deposit at B storage",
+			"done": diesel_amount >= 14.0,
 		},
 		{
-			"label": "Board shunter S",
-			"done": crew.has_survivor_aboard_unit("S"),
+			"label": "Board all outside crew",
+			"done": crew.are_all_survivors_aboard(),
 		},
 		{
-			"label": "Right click S -> Control shunter S",
-			"done": rail.get_controlled_power_unit_id() == "S",
+			"label": "Depart to next sector",
+			"done": lifecycle != null and lifecycle.run_state.sector_index > 0,
 		},
 	]
 
@@ -1489,6 +1632,26 @@ func _get_anchor_icon_kind(anchor_type: String) -> String:
 			or anchor_type == "repair_yard_control":
 		return "repair"
 	return ""
+
+
+func _get_poi_icon_kind(resource_type: String) -> String:
+	match resource_type:
+		TrainResources.RESOURCE_DIESEL:
+			return "fuel"
+		TrainResources.RESOURCE_FOOD:
+			return "food"
+	return "crate"
+
+
+func _get_poi_color(resource_type: String) -> Color:
+	match resource_type:
+		TrainResources.RESOURCE_DIESEL:
+			return POI_FUEL_COLOR
+		TrainResources.RESOURCE_FOOD:
+			return POI_FOOD_COLOR
+		TrainResources.RESOURCE_PARTS:
+			return POI_PARTS_COLOR
+	return POI_PARTS_COLOR
 
 
 func _get_anchor_label(anchor_id: String, anchor_type: String, state: Dictionary) -> String:
@@ -1573,7 +1736,8 @@ func _build_context_menu_items(world_position: Vector2) -> Array[Dictionary]:
 	_add_interior_context_items(items, world_position)
 	_add_joint_context_items(items, world_position)
 	_add_coupling_context_item(items, world_position)
-	if _get_unit_id_near_world_position(world_position) == "":
+	_add_poi_context_items(items, world_position)
+	if _get_unit_id_near_world_position(world_position) == "" and _get_poi_id_near_world_position(world_position) == "":
 		_add_context_item(items, "Move %s here" % _get_selected_survivor_name(), "move", {
 			"target_position": world_position,
 		})
@@ -1751,6 +1915,29 @@ func _add_coupling_context_item(items: Array[Dictionary], world_position: Vector
 	_add_context_item(items, _get_coupling_context_label(contact_anchor), "couple", {})
 
 
+func _add_poi_context_items(items: Array[Dictionary], world_position: Vector2) -> void:
+	var poi_id := _get_poi_id_near_world_position(world_position)
+	if poi_id == "":
+		return
+	var poi: Dictionary = get_sector_poi_state(poi_id)
+	if poi.is_empty():
+		return
+
+	var name := str(poi.get("name", poi_id))
+	if not bool(poi.get("searched", false)):
+		_add_context_item(items, "Search %s" % name, "search_poi", {
+			"poi_id": poi_id,
+		})
+		return
+
+	var amount := float(poi.get("available_amount", 0.0))
+	var resource_type := str(poi.get("available_type", ""))
+	if amount > 0.0 and resource_type != "":
+		_add_context_item(items, "Haul %.0f %s to train" % [amount, resource_type], "haul_poi", {
+			"poi_id": poi_id,
+		})
+
+
 func _add_context_item(items: Array[Dictionary], label: String, action: String, data: Dictionary) -> void:
 	for item in items:
 		if str(item.get("label", "")) == label:
@@ -1802,6 +1989,10 @@ func _execute_context_action(item: Dictionary) -> void:
 			crew.assign_uncouple(selected_id, str(item.get("front_unit", "")), str(item.get("rear_unit", "")))
 		"couple":
 			crew.assign_couple_contact(selected_id)
+		"search_poi":
+			crew.assign_search_poi(selected_id, str(item.get("poi_id", "")))
+		"haul_poi":
+			crew.assign_haul_poi_resource(selected_id, str(item.get("poi_id", "")))
 
 
 func _get_context_menu_rect() -> Rect2:
@@ -1827,7 +2018,7 @@ func _get_context_menu_size() -> Vector2:
 
 func _get_departure_modal_rect() -> Rect2:
 	var playfield := get_playfield_rect()
-	var modal_size := Vector2(minf(460.0, playfield.size.x - 48.0), 250.0)
+	var modal_size := Vector2(minf(480.0, playfield.size.x - 48.0), 290.0)
 	return Rect2(playfield.position + (playfield.size - modal_size) * 0.5, modal_size)
 
 
@@ -1877,6 +2068,11 @@ func _describe_context_target(world_position: Vector2, clicked_survivor_id: Stri
 		var anchor := yard.get_point_anchor(point_id)
 		if world_position.distance_to(anchor) <= CONTEXT_TARGET_RADIUS:
 			return point_id
+
+	var poi_id := _get_poi_id_near_world_position(world_position)
+	if poi_id != "":
+		var poi: Dictionary = get_sector_poi_state(poi_id)
+		return str(poi.get("name", poi_id))
 
 	var yard_control := yard.get_yard_control_state()
 	if world_position.distance_to(yard_control.get("repair_anchor", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS:
@@ -1937,6 +2133,19 @@ func _get_unit_id_near_world_position(world_position: Vector2) -> String:
 	return ""
 
 
+func _get_poi_id_near_world_position(world_position: Vector2) -> String:
+	var nearest_id := ""
+	var nearest_distance := CONTEXT_TARGET_RADIUS
+	for state in get_sector_poi_states():
+		var position := state.get("position", Vector2.ZERO) as Vector2
+		var distance := world_position.distance_to(position)
+		if distance >= nearest_distance:
+			continue
+		nearest_distance = distance
+		nearest_id = str(state.get("id", ""))
+	return nearest_id
+
+
 func _is_point_on_modeled_rail(point: Vector2, tolerance: float) -> bool:
 	var segments := rail.get_track_segments()
 	for segment_id: String in segments:
@@ -1991,9 +2200,14 @@ func _build_departure_confirmation_lines() -> Array[String]:
 	var def: SectorDefinition = lifecycle.current_sector.definition
 	lines.append("Leave Sector %d?" % def.sector_index)
 	lines.append("This disposes the current yard and cannot be reversed.")
+	if train_resources != null:
+		lines.append("Diesel cost: %.0f   Train diesel: %.0f" % [
+			TrainResources.DEPARTURE_DIESEL_COST,
+			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+		])
 	lines.append("Departing consist: %s" % rail.get_consist_summary())
 	lines.append("Rolling stock left behind: %s" % rail.get_detached_summary())
-	lines.append("Future supplies placeholder: food / parts / fuel left here.")
+	lines.append("Uncollected POI supplies are abandoned with this sector.")
 	lines.append("Confirm to enter the next sector, or cancel to stop.")
 	return lines
 

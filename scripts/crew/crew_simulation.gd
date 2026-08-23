@@ -22,6 +22,8 @@ const TASK_REPAIR_YARD_CONTROL := "repair_yard_control"
 const TASK_CONNECT_POWER := "connect_power"
 const TASK_REPAIR_POINT := "repair_point"
 const TASK_MOVE_ABOARD := "move_aboard"
+const TASK_SEARCH_POI := "search_poi"
+const TASK_HAUL_RESOURCE := "haul_resource"
 
 const STATUS_IDLE := "idle"
 const STATUS_ASSIGNED := "assigned"
@@ -41,6 +43,8 @@ const DEFAULT_ABOARD_LOCAL_OFFSET := Vector2(-10.0, 0.0)
 var rail: RefCounted
 var yard: RefCounted
 var interior: RefCounted
+var sector_pois: RefCounted
+var train_resources: RefCounted
 var needs: RefCounted
 var skills: RefCounted
 var survivors: Array[Dictionary] = []
@@ -55,6 +59,9 @@ var couple_interaction_duration: float = 0.55
 var board_interaction_duration: float = 0.25
 var repair_interaction_duration: float = 0.75
 var power_interaction_duration: float = 0.5
+var search_interaction_duration: float = 1.4
+var pickup_interaction_duration: float = 0.35
+var deposit_interaction_duration: float = 0.35
 var move_arrival_epsilon: float = 2.0
 
 
@@ -149,6 +156,11 @@ func get_selected_survivor_id() -> String:
 	return selected_survivor_id
 
 
+func set_scavenging_context(poi_model: RefCounted, resource_store: RefCounted) -> void:
+	sector_pois = poi_model
+	train_resources = resource_store
+
+
 func get_survivor_state(survivor_id: String) -> Dictionary:
 	var index := _find_survivor_index(survivor_id)
 	if index < 0:
@@ -191,6 +203,8 @@ func get_survivor_draw_states() -> Array[Dictionary]:
 			"job": skills.get_job(survivor_id),
 			"job_label": skills.get_job_label(skills.get_job(survivor_id)),
 			"skills": skills.get_all_skills(survivor_id),
+			"cargo_type": str(survivor.get("cargo_type", "")),
+			"cargo_amount": float(survivor.get("cargo_amount", 0.0)),
 		})
 	return states
 
@@ -511,6 +525,63 @@ func assign_couple_contact(survivor_id: String) -> bool:
 	return true
 
 
+func assign_search_poi(survivor_id: String, poi_id: String) -> bool:
+	var index := _find_survivor_index(survivor_id)
+	if index < 0:
+		return false
+	if sector_pois == null:
+		_fail_survivor(index, TASK_SEARCH_POI, "No local POIs")
+		return false
+	if str(survivors[index]["spatial_state"]) == SPATIAL_ABOARD and not rail.is_stopped():
+		_fail_survivor(index, TASK_SEARCH_POI, "Cannot leave moving train")
+		return false
+	if not sector_pois.can_search(poi_id):
+		_fail_survivor(index, TASK_SEARCH_POI, "Search target unavailable")
+		return false
+
+	var reservation_key := _poi_search_reservation_key(poi_id)
+	if not _reserve_target(index, TASK_SEARCH_POI, reservation_key):
+		return false
+
+	var state: Dictionary = sector_pois.get_poi_state(poi_id)
+	_assign_travel_task(index, TASK_SEARCH_POI, state.get("position", Vector2.ZERO) as Vector2, str(state.get("name", poi_id)), {
+		"poi_id": poi_id,
+	}, search_interaction_duration, reservation_key)
+	return true
+
+
+func assign_haul_poi_resource(survivor_id: String, poi_id: String) -> bool:
+	var index := _find_survivor_index(survivor_id)
+	if index < 0:
+		return false
+	if sector_pois == null:
+		_fail_survivor(index, TASK_HAUL_RESOURCE, "No local POIs")
+		return false
+	if train_resources == null:
+		_fail_survivor(index, TASK_HAUL_RESOURCE, "No train stockpile")
+		return false
+	if str(survivors[index]["spatial_state"]) == SPATIAL_ABOARD and not rail.is_stopped():
+		_fail_survivor(index, TASK_HAUL_RESOURCE, "Cannot leave moving train")
+		return false
+	if float(survivors[index].get("cargo_amount", 0.0)) > 0.0:
+		_fail_survivor(index, TASK_HAUL_RESOURCE, "Already carrying cargo")
+		return false
+	if not sector_pois.has_available_loot(poi_id):
+		_fail_survivor(index, TASK_HAUL_RESOURCE, "No discovered cargo")
+		return false
+
+	var reservation_key := _poi_haul_reservation_key(poi_id)
+	if not _reserve_target(index, TASK_HAUL_RESOURCE, reservation_key):
+		return false
+
+	var state: Dictionary = sector_pois.get_poi_state(poi_id)
+	_assign_travel_task(index, TASK_HAUL_RESOURCE, state.get("position", Vector2.ZERO) as Vector2, str(state.get("name", poi_id)), {
+		"phase": "pickup",
+		"poi_id": poi_id,
+	}, pickup_interaction_duration, reservation_key)
+	return true
+
+
 func cancel_task(survivor_id: String) -> bool:
 	var index := _find_survivor_index(survivor_id)
 	if index < 0:
@@ -623,6 +694,8 @@ func _make_survivor(survivor_id: String, display_name: String, host_unit: String
 		"interaction_remaining": 0.0,
 		"reservation_key": "",
 		"status_text": "Idle",
+		"cargo_type": "",
+		"cargo_amount": 0.0,
 	}
 
 
@@ -952,6 +1025,64 @@ func _execute_task(index: int) -> void:
 				failure_reason = yard.last_status
 			else:
 				survivor["status_text"] = "Repaired %s" % repair_point_id
+		TASK_SEARCH_POI:
+			var search_data := survivor["task_data"] as Dictionary
+			var poi_id := str(search_data.get("poi_id", ""))
+			if sector_pois == null:
+				succeeded = false
+				failure_reason = "No local POIs"
+			elif not sector_pois.search_poi(poi_id):
+				succeeded = false
+				failure_reason = "Search target unavailable"
+			else:
+				var poi_state: Dictionary = sector_pois.get_poi_state(poi_id)
+				survivor["status_text"] = "Found %.0f %s" % [
+					float(poi_state.get("available_amount", 0.0)),
+					str(poi_state.get("available_type", "")),
+				]
+		TASK_HAUL_RESOURCE:
+			var haul_data := survivor["task_data"] as Dictionary
+			var phase := str(haul_data.get("phase", "pickup"))
+			if phase == "pickup":
+				var haul_poi_id := str(haul_data.get("poi_id", ""))
+				if sector_pois == null:
+					succeeded = false
+					failure_reason = "No local POIs"
+				elif not sector_pois.has_available_loot(haul_poi_id):
+					succeeded = false
+					failure_reason = "No discovered cargo"
+				else:
+					var cargo: Dictionary = sector_pois.take_available_loot(haul_poi_id)
+					survivor["cargo_type"] = str(cargo.get("resource_type", ""))
+					survivor["cargo_amount"] = float(cargo.get("amount", 0.0))
+					survivor["task_status"] = STATUS_MOVING
+					survivor["task_stage"] = STAGE_YARD_TO_TARGET
+					survivor["task_target"] = "B storage"
+					survivor["task_target_position"] = _get_deposit_anchor()
+					survivor["task_data"] = {"phase": "deposit"}
+					survivor["interaction_remaining"] = deposit_interaction_duration
+					survivor["status_text"] = "Carrying %.0f %s" % [
+						float(survivor["cargo_amount"]),
+						str(survivor["cargo_type"]),
+					]
+					survivors[index] = survivor
+					return
+			elif train_resources == null:
+				succeeded = false
+				failure_reason = "No train stockpile"
+			elif str(survivor.get("cargo_type", "")) == "" or float(survivor.get("cargo_amount", 0.0)) <= 0.0:
+				succeeded = false
+				failure_reason = "No carried cargo"
+			elif not train_resources.add(str(survivor.get("cargo_type", "")), float(survivor.get("cargo_amount", 0.0))):
+				succeeded = false
+				failure_reason = "Cannot deposit cargo"
+			else:
+				survivor["status_text"] = "Deposited %.0f %s" % [
+					float(survivor.get("cargo_amount", 0.0)),
+					str(survivor.get("cargo_type", "")),
+				]
+				survivor["cargo_type"] = ""
+				survivor["cargo_amount"] = 0.0
 		_:
 			succeeded = false
 			failure_reason = "Unknown task"
@@ -1058,6 +1189,15 @@ func _get_boarding_anchor(unit_id: String) -> Vector2:
 	return _world_from_unit_local(unit_id, BOARDING_LOCAL_OFFSET)
 
 
+func _get_deposit_anchor() -> Vector2:
+	if not _get_unit_draw_state("B").is_empty():
+		return _get_boarding_anchor("B")
+	for state in rail.get_unit_draw_states():
+		if bool(state.get("active", false)):
+			return _get_boarding_anchor(str(state.get("id", "")))
+	return Vector2.ZERO
+
+
 func _get_unit_draw_state(unit_id: String) -> Dictionary:
 	for state in rail.get_unit_draw_states():
 		if str(state.get("id", "")) == unit_id:
@@ -1075,6 +1215,14 @@ func _joint_reservation_key(front_unit: String, rear_unit: String) -> String:
 
 func _couple_reservation_key(active_unit: String, detached_unit: String) -> String:
 	return "couple:%s/%s" % [active_unit, detached_unit]
+
+
+func _poi_search_reservation_key(poi_id: String) -> String:
+	return "poi:search:%s" % poi_id
+
+
+func _poi_haul_reservation_key(poi_id: String) -> String:
+	return "poi:haul:%s" % poi_id
 
 
 func _yard_reservation_key(target_type: String, target_id: String) -> String:
@@ -1110,4 +1258,3 @@ func reset_for_new_sector(new_rail: RefCounted, new_yard: RefCounted) -> void:
 			s["task_type"] = TASK_NONE
 			s["task_stage"] = ""
 			s["task_target"] = ""
-
