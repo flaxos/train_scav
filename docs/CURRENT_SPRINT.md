@@ -1,108 +1,102 @@
-# Current Sprint - Sprint 9C: Semantic Railway Topology Validation
+# Current Sprint - Sprint 9D: One Semantic Blueprint to Playable Runtime Railway
 
-**Status:** IMPLEMENTED - AUTOMATED VALIDATION READY
+**Status:** IMPLEMENTED - REVIEW READY
 
 ## Hypothesis
-A semantic railway blueprint can be mechanically rejected when its railway topology or world relationships are operationally nonsensical, before physical geometry or runtime `RailMovement` objects exist.
+One validated authored `SectorBlueprint` can be converted into an actual playable Godot railway using the existing `RailMovement` runtime, without procedural generation, without changing sector lifecycle semantics, and without hard-coding the fixture's semantic meaning into gameplay code.
 
-Sprint 9C strengthens validation only:
+Sprint 9D proves this narrow pipeline:
 
 ```text
-SPRINT 9A SCHEMA
-  -> SPRINT 9B SectorBlueprint
-  -> SEMANTIC VALIDATOR
-  -> VALID / INVALID + STRUCTURED DIAGNOSTICS
+authored small-town goods fixture
+  -> SectorBlueprint
+  -> Sprint 9C semantic validation
+  -> authored spatial embedding
+  -> WorldgenRuntimeReconstructor
+  -> RailMovement.configure_track_layout()
+  -> dedicated playable 9D harness
 ```
 
-Roadmap acceptance:
-> Invalid semantic railway/world graph data is rejected with useful diagnostic codes and IDs before geometry, scene nodes, runtime rail objects, rolling stock or sector lifecycle integration exist.
+## Reference Fixture
+Sprint 9D uses only:
 
-## Baseline Dependencies
-Sprint 9C builds directly on the accepted Sprint 9A/9B worldgen contracts:
-- `docs/deep-research-report-grammer.md` and `docs/deep-research-report-prompts.md`;
-- source-neutral rail graph roles and world relationship graph vocabulary from 9A;
-- the existing 9A JSON fixtures and validator;
-- immutable `SectorBlueprint`, canonical hashes and six authored reference archetypes from 9B;
-- completed Sprint 1-8 rail, crew, scavenging, sector lifecycle and vertical-slice systems.
+```text
+data/worldgen/archetypes/reference/small_town_goods_station_v1.json
+```
 
-Do not replace or integrate with `RailMovement`, `SectorDefinition`, `SectorInstance`, `SectorPOIs`, coupling, crew tasks, sector lifecycle or the vertical-slice scenario in 9C.
+The other five Sprint 9B reference archetypes remain semantic validation fixtures only. They are not reconstructed in 9D.
 
 ## In Scope
-The active build adds the smallest useful semantic validation layer for future authored and generated blueprints:
-1. Structured validation diagnostics with error code, concise message, relevant track/node/entity/relationship IDs and optional context.
-2. A `validate_blueprint()` API in the existing worldgen validator.
-3. Backward-compatible `validate_semantic_graph()` results preserving string `errors` for 9A/9B tests.
-4. Conservative active-rail connectivity checks that exclude `ABANDONED_TRACK` from active entry-to-exit and active-service requirements.
-5. Passing-loop, yard, spur, stub and isolated-active-track semantic checks.
-6. Conservative world-relationship checks for platform, freight/loading, industry service, road access, bridge/crossing and settlement/station references.
-7. Focused mutation tests proving useful diagnostic codes/IDs for malformed semantic data.
-8. Positive regression tests proving the six Sprint 9B authored archetypes still validate.
+1. A separate authored embedding for the small-town goods station fixture.
+2. A `WorldgenRuntimeReconstructor` that validates the blueprint and translates embedding data into runtime layout data.
+3. A minimal `RailMovement.configure_track_layout()` seam.
+4. Deterministic semantic-edge to runtime-segment mapping.
+5. Preservation of existing P1/P2/P3 wrappers and default authored railway behavior.
+6. A dedicated 9D visual harness scene for inspection and driving.
+7. Automated reconstruction and movement tests.
+
+## Embedding Boundary
+The semantic fixture describes what railway exists and why. The 9D embedding describes where the one authored fixture is physically placed.
+
+The west semantic station throat is physically embedded as two ordinary runtime turnouts:
+
+```text
+west_yard_switch: main route vs goods-yard lead
+west_loop_switch: platform main vs passing loop
+```
+
+This keeps `RailMovement` on ordinary route choices instead of introducing a multi-route special-case switch. The extra `west_station_throat` runtime connector is authored embedding data, not a semantic rail edge and not a procedural spatial solver.
 
 ## Authority Rules
-- `SectorBlueprint` is a read-only semantic description artifact. It is not live railway authority.
-- `WorldgenSchemaValidator` validates semantic dictionaries or blueprint data only.
-- The active game remains on the existing authored `SectorDefinition` path.
-- `SectorDefinition` must not automatically generate, load, validate or attach a blueprint in 9C.
-- Runtime fixtures must use source-neutral semantic roles, not raw OSM/OpenRailwayMap tags.
-- Intentional abandoned/disused semantics must be preserved.
-- Abandoned track must not satisfy active entry-to-exit connectivity or active-service requirements.
-- No physical `Vector2` track geometry, rolling stock, POI placement, terrain, routes, shunting solvability or gameplay problems are authored or validated in 9C.
-
-## Required Diagnostics
-Validation must not merely return true/false. Structured diagnostics should include:
-- `code`
-- `message`
-- `track_id`
-- `node_id`
-- `entity_id`
-- `relationship_id`
-- `context`
-
-The legacy `errors` array may contain formatted strings derived from diagnostics for compatibility, but future procgen debugging should use `diagnostics`.
-
-## Explicit Exclusions
-Do NOT implement in Sprint 9C:
-- `WorldgenRngStreams`;
-- `WorldgenSemanticGenerator`;
-- procedural archetype selection;
-- weighted feature generation;
-- procedural topology construction;
-- generation retries or fallbacks;
-- 500-seed or large seed sweeps;
-- gameplay/problem generation;
-- geometry or terrain generation;
-- runtime `RailMovement` reconstruction from blueprints;
-- shunting solvability search;
-- rolling-stock reachability;
-- train-length/headshunt clearance calculations;
-- damage/gameplay mutations;
-- rolling-stock instantiation;
-- POI spawning;
-- integration into the active `SectorLifecycle`;
-- replacement of `SectorDefinition`'s existing authored generation path;
-- 9D work.
+- `SectorBlueprint` remains immutable semantic data.
+- `WorldgenRuntimeReconstructor` translates data only; it is not railway authority.
+- `RailMovement` remains the live authority for rail-space movement, route state, speed, reversing, contact and draw transforms.
+- The active `SectorDefinition`, `SectorInstance`, `SectorLifecycle` and production `Main.tscn` path remain unchanged in 9D.
+- No rolling stock, POIs, terrain, roads, rivers or gameplay problems are generated from worldgen data in 9D.
 
 ## Automated Acceptance
-- [x] All six 9B reference archetype blueprints still validate.
-- [x] Disconnected entry/exit is rejected with a diagnostic code and relevant node context.
-- [x] One-ended passing loop is rejected with `PASSING_LOOP_NOT_DOUBLE_ENDED` and track ID.
-- [x] Isolated active track is rejected with `ISOLATED_ACTIVE_TRACK`.
-- [x] Unresolved world relationship is rejected with diagnostic code and relationship ID.
-- [x] Disconnected yard track is rejected with `YARD_TRACK_DISCONNECTED`.
-- [x] Spur with missing served facility is rejected with `SPUR_MISSING_SERVED_FACILITY`.
-- [x] Bridge without corresponding obstacle crossing is rejected with `BRIDGE_CROSSING_MISSING`.
-- [x] Platform referencing a nonexistent/invalid track is rejected with `PLATFORM_TRACK_REFERENCE_INVALID`.
-- [x] Validation does not mutate a blueprint.
-- [x] Validation does not change a blueprint canonical hash.
-- [x] Existing Sprint 9A and 9B tests remain green.
-- [x] Existing Sprint 1-8 regression tests remain green.
+- [x] The small-town goods fixture loads and validates through the Sprint 9C validator.
+- [x] The authored embedding loads separately from the semantic fixture.
+- [x] Reconstruction succeeds without mutating the blueprint or changing its canonical hash.
+- [x] Semantic edge IDs map deterministically to runtime segment IDs.
+- [x] The west station throat is decomposed into ordinary runtime turnouts.
+- [x] `RailMovement` accepts the reconstructed layout through `configure_track_layout()`.
+- [x] A locomotive can traverse entry to east exit via the platform main.
+- [x] A locomotive can route through the passing loop and reconnect to the exit segment.
+- [x] A locomotive can enter the goods loading track, stop at the buffer and reverse back to the main approach.
+- [x] Existing Sprint 1-9C regression tests remain green.
 - [x] Headless launch has no parse/compile/runtime script errors.
 
-## Human Review Gate
-Sprint 9C has no playable procedural-sector UAT. It is complete when the user accepts that semantic graph diagnostics are useful enough for future authored and generated blueprint debugging without changing the active game.
+## Human UAT
+Launch:
 
-## Definition of Done
-Sprint 9C is complete only after the focused 9C tests pass, the existing 9A/9B tests pass, the broader regression suite remains green, headless launch succeeds, and no runtime sector lifecycle, scene or railway authority path has been changed.
+```bash
+/home/flax/bin/godot --path . scenes/worldgen/Sprint9DReconstruction.tscn
+```
+
+Approximate 5-10 minute script:
+1. Confirm semantic rail labels are visible.
+2. Press `1`, then `Space`, and drive from west entry through the platform main.
+3. Reset with `0`, press `2`, and traverse the passing loop.
+4. Reset with `0`, press `3`, enter the goods loading track, stop at the buffer, reverse with `R`, and return to the main approach.
+5. Confirm there are no teleports, impossible jumps, disconnected rails or obvious geometry overlaps.
+
+## Explicit Exclusions
+Do not implement in Sprint 9D:
+- procedural generation;
+- RNG streams;
+- archetype selection;
+- reconstruction of all six fixtures;
+- general procedural spatial embedding;
+- terrain, roads, rivers, towns or POIs as generated geometry;
+- rolling-stock procedural placement;
+- damage/gameplay mutations;
+- shunting-solvability search;
+- train-length/headshunt clearance solving;
+- seed sweeps;
+- active `SectorLifecycle` replacement;
+- save/load changes;
+- art polish.
 
 ## Next Possible Increment
-Deterministic semantic generation from seeds remains deferred. Do not begin it, geometry work, runtime loading, POI spawning, rolling-stock placement or shunting solvability without an explicit new sprint plan.
+Future work may broaden runtime reconstruction, embed more fixtures or begin procedural spatial solving only after an explicit sprint plan. The 9D embedding is a proof fixture, not the general geometry generator.

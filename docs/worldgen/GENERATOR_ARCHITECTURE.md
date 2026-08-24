@@ -22,7 +22,9 @@ Sprint 9 should progress through gated increments:
   ↓
 9C: semantic topology/world-relationship validation
   ↓
-9D+: deterministic semantic generation, physical rail/world geometry, POIs, rolling stock, problems, solvability and UAT
+9D: one authored blueprint plus authored embedding reconstructed into RailMovement
+  ↓
+9E+: deterministic semantic generation, broader embedding, POIs, rolling stock, problems, solvability and UAT
 ```
 
 Sprint numbering after 9C may be revised by an explicit sprint plan, but 9C itself is only semantic validation.
@@ -65,6 +67,28 @@ The validator is independent of:
 - rolling-stock simulation.
 
 Abandoned/disused track remains meaningful semantic data, but `ABANDONED_TRACK` does not satisfy active entry-to-exit connectivity or active-service requirements.
+
+## Sprint 9D Boundary
+9D is a one-fixture runtime reconstruction proof:
+
+```text
+small-town goods SectorBlueprint
+  -> 9C semantic validation
+  -> authored spatial embedding
+  -> WorldgenRuntimeReconstructor
+  -> RailMovement.configure_track_layout()
+  -> dedicated 9D harness
+```
+
+The spatial embedding is authored fixture placement, not a procedural solver. The west semantic station throat may be decomposed into multiple ordinary physical turnouts in the embedding when that is simpler and safer for the existing runtime.
+
+The active playable game path remains:
+
+```text
+SectorDefinition -> existing authored sector setup -> existing runtime systems
+```
+
+9D does not make `SectorDefinition` automatically generate or attach blueprints.
 
 ## Future Pipeline Shape
 When generation is explicitly promoted into a later sprint, the likely long-term sector creation shape is:
@@ -115,6 +139,19 @@ Do not implement these in 9C:
 - generated POIs/resources;
 - damage/gameplay mutations;
 - active `SectorLifecycle` integration.
+
+## Deferred From 9D
+Do not implement these in 9D:
+- procedural generation;
+- RNG streams;
+- archetype selection;
+- reconstruction of all six reference fixtures;
+- general procedural spatial embedding;
+- terrain, roads, rivers, towns or POIs as generated geometry;
+- rolling-stock procedural placement;
+- shunting-solvability search;
+- train-length/headshunt clearance solving;
+- active `SectorLifecycle` replacement.
 
 ## Validation Direction
 9B validation is intentionally cheap:

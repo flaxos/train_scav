@@ -1,0 +1,163 @@
+{
+  "embedding_version": "sprint9d_small_town_goods_embedding_v1",
+  "archetype_id": "small_town_goods_station",
+  "fixture_path": "res://data/worldgen/archetypes/reference/small_town_goods_station_v1.json",
+  "runtime_layout_id": "sprint9d_small_town_goods_station_v1",
+  "entry_segment": "main_west",
+  "entry_distance": 24.0,
+  "exit_segment": "main_east",
+  "exit_distance": 240.0,
+  "segments": [
+    {
+      "runtime_segment_id": "main_west",
+      "semantic_edge_id": "main_west",
+      "points": [[120.0, 360.0], [360.0, 360.0]],
+      "end_b_block_reason": "No route through west yard switch"
+    },
+    {
+      "runtime_segment_id": "west_station_throat",
+      "semantic_edge_id": "",
+      "label": "authored connector: decomposes west semantic throat",
+      "points": [[360.0, 360.0], [460.0, 360.0]],
+      "end_b_block_reason": "No route through west loop switch"
+    },
+    {
+      "runtime_segment_id": "platform_main",
+      "semantic_edge_id": "platform_main",
+      "points": [[460.0, 360.0], [880.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks platform main"
+    },
+    {
+      "runtime_segment_id": "passing_loop",
+      "semantic_edge_id": "passing_loop",
+      "points": [[460.0, 360.0], [525.0, 425.0], [815.0, 425.0], [880.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks passing loop"
+    },
+    {
+      "runtime_segment_id": "main_east",
+      "semantic_edge_id": "main_east",
+      "points": [[880.0, 360.0], [1180.0, 360.0]],
+      "end_b_block_reason": "End of east exit"
+    },
+    {
+      "runtime_segment_id": "goods_yard_lead",
+      "semantic_edge_id": "goods_yard_lead",
+      "points": [[360.0, 360.0], [420.0, 415.0], [525.0, 500.0], [660.0, 560.0]],
+      "end_b_block_reason": "No route through yard switch"
+    },
+    {
+      "runtime_segment_id": "goods_loading",
+      "semantic_edge_id": "goods_loading",
+      "points": [[660.0, 560.0], [830.0, 560.0], [980.0, 545.0]],
+      "end_b_block_reason": "End of goods loading buffer"
+    },
+    {
+      "runtime_segment_id": "yard_headshunt",
+      "semantic_edge_id": "yard_headshunt",
+      "points": [[660.0, 560.0], [780.0, 620.0], [940.0, 630.0]],
+      "end_b_block_reason": "End of yard headshunt buffer"
+    }
+  ],
+  "points": [
+    {
+      "runtime_point_id": "west_yard_switch",
+      "semantic_node_id": "west_loop_switch",
+      "position": [360.0, 360.0],
+      "routes": ["main", "yard"],
+      "initial_route": "main"
+    },
+    {
+      "runtime_point_id": "west_loop_switch",
+      "semantic_node_id": "west_loop_switch",
+      "position": [460.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    },
+    {
+      "runtime_point_id": "east_loop_switch",
+      "semantic_node_id": "east_loop_switch",
+      "position": [880.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    },
+    {
+      "runtime_point_id": "yard_switch",
+      "semantic_node_id": "yard_switch",
+      "position": [660.0, 560.0],
+      "routes": ["loading", "headshunt"],
+      "initial_route": "loading"
+    }
+  ],
+  "next_connections": {
+    "main_west": {
+      "point": "west_yard_switch",
+      "routes": {
+        "main": "west_station_throat",
+        "yard": "goods_yard_lead"
+      }
+    },
+    "west_station_throat": {
+      "point": "west_loop_switch",
+      "routes": {
+        "platform": "platform_main",
+        "loop": "passing_loop"
+      }
+    },
+    "platform_main": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "platform"
+    },
+    "passing_loop": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "loop"
+    },
+    "goods_yard_lead": {
+      "point": "yard_switch",
+      "routes": {
+        "loading": "goods_loading",
+        "headshunt": "yard_headshunt"
+      }
+    }
+  },
+  "previous_connections": {
+    "west_station_throat": {
+      "segment": "main_west",
+      "requires_point": "west_yard_switch",
+      "requires_route": "main"
+    },
+    "goods_yard_lead": {
+      "segment": "main_west",
+      "requires_point": "west_yard_switch",
+      "requires_route": "yard"
+    },
+    "platform_main": {
+      "segment": "west_station_throat",
+      "requires_point": "west_loop_switch",
+      "requires_route": "platform"
+    },
+    "passing_loop": {
+      "segment": "west_station_throat",
+      "requires_point": "west_loop_switch",
+      "requires_route": "loop"
+    },
+    "main_east": {
+      "point": "east_loop_switch",
+      "routes": {
+        "platform": "platform_main",
+        "loop": "passing_loop"
+      }
+    },
+    "goods_loading": {
+      "segment": "goods_yard_lead",
+      "requires_point": "yard_switch",
+      "requires_route": "loading"
+    },
+    "yard_headshunt": {
+      "segment": "goods_yard_lead",
+      "requires_point": "yard_switch",
+      "requires_route": "headshunt"
+    }
+  }
+}

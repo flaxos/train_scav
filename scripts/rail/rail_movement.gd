@@ -144,6 +144,14 @@ var yard_point_routes: Dictionary = {
 	"P2": POINTS_MAIN,
 	"P3": POINTS_SIDING,
 }
+var _runtime_layout_id: String = "default_authored_yard"
+var _layout_primary_point_id: String = "P1"
+var _layout_segment_points: Dictionary = {}
+var _layout_segment_semantics: Dictionary = {}
+var _layout_point_definitions: Dictionary = {}
+var _layout_next_connections: Dictionary = {}
+var _layout_previous_connections: Dictionary = {}
+var _layout_endpoint_b_block_reasons: Dictionary = {}
 # Track routing is directional: facing moves from a common leg consult the
 # switch setting, while reverse/trailing moves follow the segment's structural
 # connection back to its common leg. A live switch setting must never rewrite
@@ -185,6 +193,10 @@ var safe_contact_speed: float = DEFAULT_SAFE_CONTACT_SPEED
 var max_coupling_speed: float = DEFAULT_SAFE_CONTACT_SPEED
 
 
+func _init() -> void:
+	_apply_track_layout(_make_default_track_layout())
+
+
 func step(delta: float, brake_active: bool) -> void:
 	self.brake_active = brake_active
 	blocked_reason = ""
@@ -215,118 +227,178 @@ func reverse_direction() -> bool:
 	return set_direction(-direction)
 
 
-func set_points_route(route: String) -> void:
-	if route != POINTS_MAIN and route != POINTS_SIDING:
-		return
+func configure_track_layout(layout: Dictionary) -> Dictionary:
+	var diagnostics: Array[Dictionary] = []
+	_validate_track_layout(layout, diagnostics)
+	if not diagnostics.is_empty():
+		return {
+			"valid": false,
+			"diagnostics": diagnostics,
+		}
 
-	points_route = route
+	_apply_track_layout(layout)
+	current_segment = str(layout.get("entry_segment", current_segment))
+	distance = float(layout.get("entry_distance", distance))
+	speed = 0.0
+	throttle = 0.0
+	direction = 1
+	blocked_reason = ""
+	last_contact.clear()
+	return {
+		"valid": true,
+		"diagnostics": [],
+	}
 
 
-func toggle_points() -> void:
-	if points_route == POINTS_MAIN:
-		points_route = POINTS_SIDING
-	else:
-		points_route = POINTS_MAIN
+func get_runtime_topology_snapshot() -> Dictionary:
+	var segments: Dictionary = {}
+	for raw_segment_id in _layout_segment_points.keys():
+		var segment_id := str(raw_segment_id)
+		var semantics := _layout_segment_semantics.get(segment_id, {}) as Dictionary
+		segments[segment_id] = {
+			"points": _vector_points_to_pairs(_get_segment_points(segment_id)),
+			"semantic_edge_id": str(semantics.get("semantic_edge_id", "")),
+			"semantic_role": str(semantics.get("semantic_role", "")),
+		}
+
+	var points: Dictionary = {}
+	for raw_point_id in _layout_point_definitions.keys():
+		var point_id := str(raw_point_id)
+		var definition := _layout_point_definitions[point_id] as Dictionary
+		var position := definition.get("position", Vector2.ZERO) as Vector2
+		points[point_id] = {
+			"semantic_node_id": str(definition.get("semantic_node_id", "")),
+			"position": [position.x, position.y],
+			"routes": (definition.get("routes", []) as Array).duplicate(true),
+			"route": get_point_route(point_id),
+		}
+
+	return {
+		"layout_id": _runtime_layout_id,
+		"segments": segments,
+		"points": points,
+		"next_connections": _layout_next_connections.duplicate(true),
+		"previous_connections": _layout_previous_connections.duplicate(true),
+	}
 
 
-func set_yard_point_route(point_id: String, route: String) -> bool:
-	if route != POINTS_MAIN and route != POINTS_SIDING:
+func get_segment_semantic_id(segment_id: String) -> String:
+	var semantics := _layout_segment_semantics.get(segment_id, {}) as Dictionary
+	return str(semantics.get("semantic_edge_id", ""))
+
+
+func get_segment_semantic_role(segment_id: String) -> String:
+	var semantics := _layout_segment_semantics.get(segment_id, {}) as Dictionary
+	return str(semantics.get("semantic_role", ""))
+
+
+func get_point_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for raw_point_id in _layout_point_definitions.keys():
+		ids.append(str(raw_point_id))
+	ids.sort()
+	return ids
+
+
+func get_point_route(point_id: String) -> String:
+	if point_id == _layout_primary_point_id:
+		return points_route
+	var definition := _layout_point_definitions.get(point_id, {}) as Dictionary
+	return str(yard_point_routes.get(point_id, definition.get("initial_route", POINTS_MAIN)))
+
+
+func set_point_route(point_id: String, route: String) -> bool:
+	if not _layout_point_definitions.has(point_id):
 		return false
-	if not yard_point_routes.has(point_id):
+	var definition := _layout_point_definitions[point_id] as Dictionary
+	var routes := definition.get("routes", []) as Array
+	if not routes.has(route):
 		return false
-
-	yard_point_routes[point_id] = route
+	_store_point_route(point_id, route)
 	return true
 
 
+func request_point_toggle(point_id: String) -> bool:
+	if not _layout_point_definitions.has(point_id):
+		blocked_reason = "Unknown point"
+		return false
+	if not is_stopped():
+		blocked_reason = "Stop before changing points"
+		return false
+	if is_point_occupied(point_id):
+		blocked_reason = "%s occupied" % point_id
+		return false
+
+	_toggle_point_route(point_id)
+	blocked_reason = "%s changed to %s" % [point_id, get_point_route(point_id)]
+	return true
+
+
+func is_point_occupied(point_id: String) -> bool:
+	if not _layout_point_definitions.has(point_id):
+		return false
+	var definition := _layout_point_definitions[point_id] as Dictionary
+	var point_position := definition.get("position", Vector2.ZERO) as Vector2
+	for state in get_unit_draw_states():
+		var half_length := float(state.get("length", 0.0)) * 0.5
+		var clearance := SWITCH_OCCUPANCY_CLEARANCE + half_length
+		var unit_position := state.get("position", Vector2.ZERO) as Vector2
+		if unit_position.distance_to(point_position) <= clearance:
+			return true
+	return false
+
+
+func set_points_route(route: String) -> void:
+	set_point_route(_layout_primary_point_id, route)
+
+
+func toggle_points() -> void:
+	_toggle_point_route(_layout_primary_point_id)
+
+
+func set_yard_point_route(point_id: String, route: String) -> bool:
+	return set_point_route(point_id, route)
+
+
 func get_yard_point_route(point_id: String) -> String:
-	return str(yard_point_routes.get(point_id, POINTS_MAIN))
+	return get_point_route(point_id)
 
 
 func toggle_yard_point(point_id: String) -> bool:
-	if not yard_point_routes.has(point_id):
+	if not _layout_point_definitions.has(point_id):
 		return false
-	if get_yard_point_route(point_id) == POINTS_MAIN:
-		yard_point_routes[point_id] = POINTS_SIDING
-	else:
-		yard_point_routes[point_id] = POINTS_MAIN
+	_toggle_point_route(point_id)
 	return true
 
 
 func request_points_toggle() -> bool:
-	if not is_stopped():
-		blocked_reason = "Stop before changing points"
-		return false
-	if is_switch_occupied():
+	var changed := request_point_toggle(_layout_primary_point_id)
+	if changed:
+		blocked_reason = "Points changed to %s" % points_route
+	elif blocked_reason == "%s occupied" % _layout_primary_point_id:
 		blocked_reason = "Points occupied"
-		return false
-
-	toggle_points()
-	blocked_reason = "Points changed to %s" % points_route
-	return true
+	return changed
 
 
 func request_yard_point_toggle(point_id: String) -> bool:
-	if not yard_point_routes.has(point_id):
+	if not _layout_point_definitions.has(point_id):
 		blocked_reason = "Unknown yard point"
 		return false
-	if not is_stopped():
-		blocked_reason = "Stop before changing points"
-		return false
-	if is_yard_point_occupied(point_id):
-		blocked_reason = "%s occupied" % point_id
-		return false
-
-	toggle_yard_point(point_id)
-	blocked_reason = "%s changed to %s" % [point_id, get_yard_point_route(point_id)]
-	return true
+	return request_point_toggle(point_id)
 
 
 func get_points_operator_anchor() -> Vector2:
-	return SWITCH_POSITION + SWITCH_OPERATOR_ANCHOR_OFFSET
+	var definition := _layout_point_definitions.get(_layout_primary_point_id, {}) as Dictionary
+	var position := definition.get("position", SWITCH_POSITION) as Vector2
+	return position + SWITCH_OPERATOR_ANCHOR_OFFSET
 
 
 func is_switch_occupied() -> bool:
-	for state in get_unit_draw_states():
-		var segment_id := str(state.get("segment", ""))
-		var segment_distance := float(state.get("distance", 0.0))
-		var half_length := float(state.get("length", 0.0)) * 0.5
-		var clearance := SWITCH_OCCUPANCY_CLEARANCE + half_length
-		if segment_id == SEGMENT_MAIN_WEST:
-			if absf(get_segment_length(SEGMENT_MAIN_WEST) - segment_distance) <= clearance:
-				return true
-		elif segment_id == SEGMENT_MAIN_EAST or segment_id == SEGMENT_SIDING:
-			if segment_distance <= clearance:
-				return true
-
-	return false
+	return is_point_occupied(_layout_primary_point_id)
 
 
 func is_yard_point_occupied(point_id: String) -> bool:
-	for state in get_unit_draw_states():
-		var segment_id := str(state.get("segment", ""))
-		var segment_distance := float(state.get("distance", 0.0))
-		var half_length := float(state.get("length", 0.0)) * 0.5
-		var clearance := SWITCH_OCCUPANCY_CLEARANCE + half_length
-
-		if point_id == "P2":
-			if segment_id == SEGMENT_MAIN_EAST:
-				if absf(get_segment_length(SEGMENT_MAIN_EAST) - segment_distance) <= clearance:
-					return true
-			elif segment_id == SEGMENT_MAIN_EXIT and segment_distance <= clearance:
-				return true
-			elif segment_id == SEGMENT_SIDING_B and segment_distance <= clearance:
-				return true
-
-		elif point_id == "P3":
-			if segment_id == SEGMENT_SIDING:
-				if absf(get_segment_length(SEGMENT_SIDING) - segment_distance) <= clearance:
-					return true
-			elif segment_id == SEGMENT_YARD_STORAGE or segment_id == SEGMENT_YARD_REPAIR:
-				if segment_distance <= clearance:
-					return true
-
-	return false
+	return is_point_occupied(point_id)
 
 
 func is_stopped() -> bool:
@@ -860,7 +932,7 @@ func couple_nearest() -> bool:
 
 
 func get_segment_length(segment_id: String = current_segment) -> float:
-	var points: Array = _SEGMENT_POINTS[segment_id]
+	var points: Array = _get_segment_points(segment_id)
 	var total := 0.0
 	for index in range(points.size() - 1):
 		total += (points[index + 1] as Vector2).distance_to(points[index] as Vector2)
@@ -868,7 +940,9 @@ func get_segment_length(segment_id: String = current_segment) -> float:
 
 
 func get_position_at_distance(segment_id: String, segment_distance: float) -> Vector2:
-	var points: Array = _SEGMENT_POINTS[segment_id]
+	var points: Array = _get_segment_points(segment_id)
+	if points.is_empty():
+		return Vector2.ZERO
 	var remaining := clampf(segment_distance, 0.0, get_segment_length(segment_id))
 	for index in range(points.size() - 1):
 		var start := points[index] as Vector2
@@ -883,7 +957,9 @@ func get_position_at_distance(segment_id: String, segment_distance: float) -> Ve
 
 
 func get_tangent_at_distance(segment_id: String, segment_distance: float) -> Vector2:
-	var points: Array = _SEGMENT_POINTS[segment_id]
+	var points: Array = _get_segment_points(segment_id)
+	if points.size() < 2:
+		return Vector2.RIGHT
 	var remaining := clampf(segment_distance, 0.0, get_segment_length(segment_id))
 	for index in range(points.size() - 1):
 		var start := points[index] as Vector2
@@ -963,7 +1039,7 @@ func get_debug_lines() -> Array[String]:
 
 
 func get_track_segments() -> Dictionary:
-	return _SEGMENT_POINTS
+	return _layout_segment_points
 
 
 func _update_speed(delta: float, brake_active: bool) -> void:
@@ -1096,25 +1172,7 @@ func _leave_endpoint_b() -> bool:
 		distance = 0.0
 		return true
 
-	match current_segment:
-		SEGMENT_MAIN_EAST:
-			blocked_reason = "End of main line"
-		SEGMENT_MAIN_EXIT:
-			blocked_reason = "End of main line"
-		SEGMENT_SIDING_B:
-			blocked_reason = "End of workshop siding"
-		SEGMENT_YARD_STORAGE:
-			blocked_reason = "End of storage siding"
-		SEGMENT_INDUSTRIAL_EXIT:
-			blocked_reason = "End of industrial route"
-		SEGMENT_SETTLEMENT_EXIT:
-			blocked_reason = "End of settlement route"
-		SEGMENT_YARD_REPAIR:
-			blocked_reason = "End of repair siding"
-		SEGMENT_SIDING:
-			blocked_reason = "No route through P3"
-		SEGMENT_MAIN_WEST:
-			blocked_reason = "No route through points"
+	blocked_reason = _get_endpoint_b_block_reason(current_segment)
 	return false
 
 
@@ -1147,7 +1205,7 @@ func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dict
 	var resolved_segment := segment_id
 	var resolved_distance := segment_distance
 	var guard := 0
-	while resolved_distance < 0.0 and guard < 4:
+	while resolved_distance < 0.0 and guard < 8:
 		guard += 1
 		var previous_segment := _get_previous_segment(resolved_segment)
 		if previous_segment == "":
@@ -1157,7 +1215,7 @@ func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dict
 		resolved_distance += get_segment_length(resolved_segment)
 
 	guard = 0
-	while resolved_distance > get_segment_length(resolved_segment) and guard < 4:
+	while resolved_distance > get_segment_length(resolved_segment) and guard < 8:
 		guard += 1
 		var next_segment := _get_next_segment(resolved_segment)
 		if next_segment == "":
@@ -1173,49 +1231,29 @@ func _resolve_path_distance(segment_id: String, segment_distance: float) -> Dict
 
 
 func _has_structural_previous_segment(segment_id: String) -> bool:
-	return _get_previous_segment(segment_id) != ""
+	return _layout_previous_connections.has(segment_id) or _get_previous_segment(segment_id) != ""
 
 
 func _is_trailing_route_aligned(segment_id: String) -> bool:
 	# Facing and trailing moves use the same physical point alignment. A branch
 	# already occupied by a train does not magically become the selected branch;
 	# if the points are against the movement, the train stops at the turnout.
-	match segment_id:
-		SEGMENT_MAIN_EAST:
-			return points_route == POINTS_MAIN
-		SEGMENT_MAIN_EXIT:
-			return get_yard_point_route("P2") == POINTS_MAIN
-		SEGMENT_SIDING:
-			return points_route == POINTS_SIDING
-		SEGMENT_SIDING_B:
-			return get_yard_point_route("P2") == POINTS_SIDING
-		SEGMENT_YARD_STORAGE:
-			return get_yard_point_route("P3") == POINTS_MAIN
-		SEGMENT_INDUSTRIAL_EXIT, SEGMENT_SETTLEMENT_EXIT:
-			return true
-		SEGMENT_YARD_REPAIR:
-			return get_yard_point_route("P3") == POINTS_SIDING
+	if _layout_previous_connections.has(segment_id):
+		var connection := _layout_previous_connections[segment_id] as Dictionary
+		if connection.has("requires_point"):
+			return get_point_route(str(connection.get("requires_point", ""))) == str(connection.get("requires_route", ""))
+		if connection.has("point"):
+			return _get_previous_segment(segment_id) != ""
 	return true
 
 
 func _get_trailing_route_block_reason(segment_id: String) -> String:
-	match segment_id:
-		SEGMENT_MAIN_EAST:
-			return "P1 route blocks main line"
-		SEGMENT_MAIN_EXIT:
-			return "P2 route blocks main line"
-		SEGMENT_SIDING:
-			return "P1 route blocks siding"
-		SEGMENT_SIDING_B:
-			return "P2 route blocks workshop siding"
-		SEGMENT_YARD_STORAGE:
-			return "P3 route blocks storage siding"
-		SEGMENT_INDUSTRIAL_EXIT:
-			return "Industrial route continuation blocked"
-		SEGMENT_SETTLEMENT_EXIT:
-			return "Settlement route continuation blocked"
-		SEGMENT_YARD_REPAIR:
-			return "P3 route blocks repair siding"
+	if _layout_previous_connections.has(segment_id):
+		var connection := _layout_previous_connections[segment_id] as Dictionary
+		if connection.has("blocked_reason"):
+			return str(connection.get("blocked_reason", "No route through points"))
+		if connection.has("requires_point"):
+			return "%s route blocks %s" % [str(connection.get("requires_point", "point")), segment_id]
 	return "No route through points"
 
 
@@ -1224,19 +1262,8 @@ func _get_previous_segment(segment_id: String) -> String:
 	# movement layer at the moment the trailing/rear coupler reaches the turnout.
 	# Keeping topology separate avoids using the live switch setting to redraw a
 	# consist that is already straddling an aligned turnout.
-	match segment_id:
-		SEGMENT_MAIN_EXIT:
-			return SEGMENT_MAIN_EAST
-		SEGMENT_MAIN_EAST, SEGMENT_SIDING:
-			return SEGMENT_MAIN_WEST
-		SEGMENT_SIDING_B:
-			return SEGMENT_MAIN_EAST
-		SEGMENT_YARD_STORAGE, SEGMENT_YARD_REPAIR:
-			return SEGMENT_SIDING
-		SEGMENT_INDUSTRIAL_EXIT:
-			return SEGMENT_SIDING_B
-		SEGMENT_SETTLEMENT_EXIT:
-			return SEGMENT_YARD_STORAGE
+	if _layout_previous_connections.has(segment_id):
+		return _resolve_previous_connection_target(_layout_previous_connections[segment_id] as Dictionary)
 	return ""
 
 
@@ -1244,24 +1271,316 @@ func _get_next_segment(segment_id: String) -> String:
 	# Facing movement from a common leg is the only place where the live switch
 	# route chooses a branch. Reverse/trailing continuity is handled by
 	# `_get_previous_segment()`.
-	match segment_id:
-		SEGMENT_MAIN_WEST:
-			if points_route == POINTS_SIDING:
-				return SEGMENT_SIDING
-			return SEGMENT_MAIN_EAST
-		SEGMENT_MAIN_EAST:
-			if get_yard_point_route("P2") == POINTS_SIDING:
-				return SEGMENT_SIDING_B
-			return SEGMENT_MAIN_EXIT
-		SEGMENT_SIDING:
-			if get_yard_point_route("P3") == POINTS_SIDING:
-				return SEGMENT_YARD_REPAIR
-			return SEGMENT_YARD_STORAGE
-		SEGMENT_SIDING_B:
-			return SEGMENT_INDUSTRIAL_EXIT
-		SEGMENT_YARD_STORAGE:
-			return SEGMENT_SETTLEMENT_EXIT
+	if _layout_next_connections.has(segment_id):
+		return _resolve_connection_target(_layout_next_connections[segment_id] as Dictionary)
 	return ""
+
+
+func _make_default_track_layout() -> Dictionary:
+	var segments: Dictionary = {}
+	for raw_segment_id in _SEGMENT_POINTS.keys():
+		var segment_id := str(raw_segment_id)
+		segments[segment_id] = (_SEGMENT_POINTS[raw_segment_id] as Array).duplicate(true)
+
+	var segment_semantics: Dictionary = {}
+	for raw_segment_id in segments.keys():
+		segment_semantics[str(raw_segment_id)] = {
+			"semantic_edge_id": "",
+			"semantic_role": "",
+		}
+
+	return {
+		"layout_id": "default_authored_yard",
+		"primary_point_id": "P1",
+		"entry_segment": SEGMENT_MAIN_WEST,
+		"entry_distance": distance,
+		"segments": segments,
+		"segment_semantics": segment_semantics,
+		"points": {
+			"P1": {
+				"id": "P1",
+				"position": SWITCH_POSITION,
+				"routes": [POINTS_MAIN, POINTS_SIDING],
+				"initial_route": POINTS_MAIN,
+			},
+			"P2": {
+				"id": "P2",
+				"position": Vector2(1320.0, 360.0),
+				"routes": [POINTS_MAIN, POINTS_SIDING],
+				"initial_route": POINTS_MAIN,
+			},
+			"P3": {
+				"id": "P3",
+				"position": Vector2(1080.0, 515.0),
+				"routes": [POINTS_MAIN, POINTS_SIDING],
+				"initial_route": POINTS_SIDING,
+			},
+		},
+		"next_connections": {
+			SEGMENT_MAIN_WEST: {
+				"point": "P1",
+				"routes": {
+					POINTS_MAIN: SEGMENT_MAIN_EAST,
+					POINTS_SIDING: SEGMENT_SIDING,
+				},
+			},
+			SEGMENT_MAIN_EAST: {
+				"point": "P2",
+				"routes": {
+					POINTS_MAIN: SEGMENT_MAIN_EXIT,
+					POINTS_SIDING: SEGMENT_SIDING_B,
+				},
+			},
+			SEGMENT_SIDING: {
+				"point": "P3",
+				"routes": {
+					POINTS_MAIN: SEGMENT_YARD_STORAGE,
+					POINTS_SIDING: SEGMENT_YARD_REPAIR,
+				},
+			},
+			SEGMENT_SIDING_B: {
+				"segment": SEGMENT_INDUSTRIAL_EXIT,
+			},
+			SEGMENT_YARD_STORAGE: {
+				"segment": SEGMENT_SETTLEMENT_EXIT,
+			},
+		},
+		"previous_connections": {
+			SEGMENT_MAIN_EAST: {
+				"segment": SEGMENT_MAIN_WEST,
+				"requires_point": "P1",
+				"requires_route": POINTS_MAIN,
+				"blocked_reason": "P1 route blocks main line",
+			},
+			SEGMENT_SIDING: {
+				"segment": SEGMENT_MAIN_WEST,
+				"requires_point": "P1",
+				"requires_route": POINTS_SIDING,
+				"blocked_reason": "P1 route blocks siding",
+			},
+			SEGMENT_MAIN_EXIT: {
+				"segment": SEGMENT_MAIN_EAST,
+				"requires_point": "P2",
+				"requires_route": POINTS_MAIN,
+				"blocked_reason": "P2 route blocks main line",
+			},
+			SEGMENT_SIDING_B: {
+				"segment": SEGMENT_MAIN_EAST,
+				"requires_point": "P2",
+				"requires_route": POINTS_SIDING,
+				"blocked_reason": "P2 route blocks workshop siding",
+			},
+			SEGMENT_YARD_STORAGE: {
+				"segment": SEGMENT_SIDING,
+				"requires_point": "P3",
+				"requires_route": POINTS_MAIN,
+				"blocked_reason": "P3 route blocks storage siding",
+			},
+			SEGMENT_YARD_REPAIR: {
+				"segment": SEGMENT_SIDING,
+				"requires_point": "P3",
+				"requires_route": POINTS_SIDING,
+				"blocked_reason": "P3 route blocks repair siding",
+			},
+			SEGMENT_INDUSTRIAL_EXIT: {
+				"segment": SEGMENT_SIDING_B,
+			},
+			SEGMENT_SETTLEMENT_EXIT: {
+				"segment": SEGMENT_YARD_STORAGE,
+			},
+		},
+		"endpoint_b_block_reasons": {
+			SEGMENT_MAIN_WEST: "No route through points",
+			SEGMENT_MAIN_EAST: "End of main line",
+			SEGMENT_MAIN_EXIT: "End of main line",
+			SEGMENT_SIDING: "No route through P3",
+			SEGMENT_SIDING_B: "End of workshop siding",
+			SEGMENT_YARD_STORAGE: "End of storage siding",
+			SEGMENT_YARD_REPAIR: "End of repair siding",
+			SEGMENT_INDUSTRIAL_EXIT: "End of industrial route",
+			SEGMENT_SETTLEMENT_EXIT: "End of settlement route",
+		},
+	}
+
+
+func _validate_track_layout(layout: Dictionary, diagnostics: Array[Dictionary]) -> void:
+	if not layout.has("segments") or typeof(layout.get("segments")) != TYPE_DICTIONARY:
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_SEGMENTS_REQUIRED", "track layout requires segments")
+		return
+	if not layout.has("points") or typeof(layout.get("points")) != TYPE_DICTIONARY:
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_POINTS_REQUIRED", "track layout requires points")
+		return
+
+	var segments := layout.get("segments", {}) as Dictionary
+	for raw_segment_id in segments.keys():
+		var segment_id := str(raw_segment_id)
+		var points := _coerce_segment_points(segments[raw_segment_id])
+		if points.size() < 2:
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_SEGMENT_POINTS_INVALID", "segment %s requires at least two points" % segment_id, segment_id)
+
+	var entry_segment := str(layout.get("entry_segment", ""))
+	if not entry_segment.is_empty() and not segments.has(entry_segment):
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_ENTRY_SEGMENT_INVALID", "entry segment %s is not in layout" % entry_segment, entry_segment)
+
+	_validate_runtime_connections(layout.get("next_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, diagnostics)
+	_validate_runtime_connections(layout.get("previous_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, diagnostics)
+
+
+func _validate_runtime_connections(
+	connections: Dictionary,
+	segments: Dictionary,
+	points: Dictionary,
+	diagnostics: Array[Dictionary]
+) -> void:
+	for raw_segment_id in connections.keys():
+		var segment_id := str(raw_segment_id)
+		if not segments.has(segment_id):
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_SEGMENT_INVALID", "connection references unknown segment %s" % segment_id, segment_id)
+			continue
+		var connection := connections[raw_segment_id] as Dictionary
+		if connection.has("point") and not points.has(str(connection.get("point", ""))):
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_POINT_INVALID", "connection %s references unknown point" % segment_id, segment_id)
+		if connection.has("requires_point") and not points.has(str(connection.get("requires_point", ""))):
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_POINT_INVALID", "connection %s references unknown required point" % segment_id, segment_id)
+		if connection.has("segment") and not segments.has(str(connection.get("segment", ""))):
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_TARGET_INVALID", "connection %s references unknown target segment" % segment_id, segment_id)
+		var routes := connection.get("routes", {}) as Dictionary
+		for raw_route in routes.keys():
+			if not segments.has(str(routes[raw_route])):
+				_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_TARGET_INVALID", "route %s from %s references unknown target segment" % [str(raw_route), segment_id], segment_id)
+
+
+func _apply_track_layout(layout: Dictionary) -> void:
+	_runtime_layout_id = str(layout.get("layout_id", "runtime_layout"))
+
+	_layout_segment_points.clear()
+	var raw_segments := layout.get("segments", {}) as Dictionary
+	for raw_segment_id in raw_segments.keys():
+		var segment_id := str(raw_segment_id)
+		_layout_segment_points[segment_id] = _coerce_segment_points(raw_segments[raw_segment_id])
+
+	_layout_segment_semantics.clear()
+	var raw_semantics := layout.get("segment_semantics", {}) as Dictionary
+	for raw_segment_id in _layout_segment_points.keys():
+		var segment_id := str(raw_segment_id)
+		_layout_segment_semantics[segment_id] = (raw_semantics.get(segment_id, {}) as Dictionary).duplicate(true)
+
+	_layout_point_definitions.clear()
+	var raw_points := layout.get("points", {}) as Dictionary
+	for raw_point_id in raw_points.keys():
+		var point_id := str(raw_point_id)
+		var raw_definition := raw_points[raw_point_id] as Dictionary
+		_layout_point_definitions[point_id] = {
+			"id": point_id,
+			"semantic_node_id": str(raw_definition.get("semantic_node_id", "")),
+			"position": raw_definition.get("position", Vector2.ZERO) as Vector2,
+			"routes": (raw_definition.get("routes", []) as Array).duplicate(true),
+			"initial_route": str(raw_definition.get("initial_route", POINTS_MAIN)),
+		}
+
+	_layout_primary_point_id = str(layout.get("primary_point_id", ""))
+	if _layout_primary_point_id.is_empty():
+		if _layout_point_definitions.has("P1"):
+			_layout_primary_point_id = "P1"
+		else:
+			var point_ids := get_point_ids()
+			if not point_ids.is_empty():
+				_layout_primary_point_id = point_ids[0]
+
+	_layout_next_connections = (layout.get("next_connections", {}) as Dictionary).duplicate(true)
+	_layout_previous_connections = (layout.get("previous_connections", {}) as Dictionary).duplicate(true)
+	_layout_endpoint_b_block_reasons = (layout.get("endpoint_b_block_reasons", {}) as Dictionary).duplicate(true)
+
+	yard_point_routes.clear()
+	for raw_point_id in _layout_point_definitions.keys():
+		var point_id := str(raw_point_id)
+		var definition := _layout_point_definitions[point_id] as Dictionary
+		_store_point_route(point_id, str(definition.get("initial_route", POINTS_MAIN)))
+
+
+func _coerce_segment_points(raw_points: Variant) -> Array[Vector2]:
+	var points: Array[Vector2] = []
+	if typeof(raw_points) != TYPE_ARRAY:
+		return points
+	for raw_point in raw_points as Array:
+		if typeof(raw_point) == TYPE_VECTOR2:
+			points.append(raw_point as Vector2)
+		elif typeof(raw_point) == TYPE_ARRAY:
+			var pair := raw_point as Array
+			if pair.size() >= 2:
+				points.append(Vector2(float(pair[0]), float(pair[1])))
+	return points
+
+
+func _get_segment_points(segment_id: String) -> Array:
+	return _layout_segment_points.get(segment_id, []) as Array
+
+
+func _resolve_connection_target(connection: Dictionary) -> String:
+	if connection.has("point"):
+		var point_id := str(connection.get("point", ""))
+		var route := get_point_route(point_id)
+		var routes := connection.get("routes", {}) as Dictionary
+		return str(routes.get(route, ""))
+	if connection.has("segment"):
+		if connection.has("requires_point"):
+			var required_point := str(connection.get("requires_point", ""))
+			var required_route := str(connection.get("requires_route", ""))
+			if get_point_route(required_point) != required_route:
+				return ""
+		return str(connection.get("segment", ""))
+	return ""
+
+
+func _resolve_previous_connection_target(connection: Dictionary) -> String:
+	if connection.has("point"):
+		var point_id := str(connection.get("point", ""))
+		var route := get_point_route(point_id)
+		var routes := connection.get("routes", {}) as Dictionary
+		return str(routes.get(route, ""))
+	if connection.has("segment"):
+		return str(connection.get("segment", ""))
+	return ""
+
+
+func _get_endpoint_b_block_reason(segment_id: String) -> String:
+	return str(_layout_endpoint_b_block_reasons.get(segment_id, "End of track"))
+
+
+func _store_point_route(point_id: String, route: String) -> void:
+	if point_id == _layout_primary_point_id:
+		points_route = route
+	else:
+		yard_point_routes[point_id] = route
+
+
+func _toggle_point_route(point_id: String) -> void:
+	var definition := _layout_point_definitions.get(point_id, {}) as Dictionary
+	var routes := definition.get("routes", []) as Array
+	if routes.is_empty():
+		return
+	var current_route := get_point_route(point_id)
+	var current_index := routes.find(current_route)
+	if current_index < 0:
+		current_index = 0
+	var next_index := (current_index + 1) % routes.size()
+	_store_point_route(point_id, str(routes[next_index]))
+
+
+func _vector_points_to_pairs(points: Array) -> Array:
+	var pairs: Array = []
+	for point in points:
+		var vector := point as Vector2
+		pairs.append([vector.x, vector.y])
+	return pairs
+
+
+func _add_layout_diagnostic(diagnostics: Array[Dictionary], code: String, message: String, segment_id: String = "") -> void:
+	diagnostics.append({
+		"code": code,
+		"message": message,
+		"segment_id": segment_id,
+	})
 
 
 func _get_all_unit_ids() -> Array[String]:

@@ -117,3 +117,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-029 — Sprint 9C validates semantic topology before geometry
 **Decision:** Sprint 9C strengthens `WorldgenSchemaValidator` with structured diagnostics for semantic railway topology and world-relationship errors while remaining independent of scene nodes, `RailMovement`, `SectorLifecycle`, POIs and rolling-stock simulation.
 **Reason:** Future authored and generated blueprints need actionable rejection reasons before geometry or runtime reconstruction exists. Keeping validation semantic-only catches bad graph meaning early without expanding into generator, shunting solvability or physical railway authority scope.
+
+## D-030 — Sprint 9D reconstructs one authored blueprint through the existing rail runtime
+**Decision:** Sprint 9D reconstructs only the `small_town_goods_station` reference blueprint into a playable railway by pairing the immutable semantic fixture with a separate authored spatial embedding and passing the resulting layout into a minimal `RailMovement.configure_track_layout()` seam. The active `SectorDefinition`, `SectorInstance`, `SectorLifecycle` and production `Main.tscn` path remain unchanged.
+**Reason:** Runtime reconstruction needs proof against the real rail authority before procedural geometry is attempted. Keeping the embedding separate preserves the 9A-9C semantic contract, while decomposing the west semantic throat into ordinary runtime turnouts avoids destabilising `RailMovement` with a multi-route special case.

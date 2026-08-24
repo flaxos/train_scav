@@ -91,3 +91,15 @@ Conservative 9C rules:
 - bridge relations must correspond to an existing water-crossing relation on the same rail edge.
 
 `ABANDONED_TRACK` remains valid semantic evidence for declining/disused archetypes, but it does not satisfy active movement or active-service validation.
+
+## Sprint 9D Runtime Reconstruction Fixture
+Sprint 9D adds one authored spatial embedding for `small_town_goods_station`.
+
+The semantic fixture remains a source-neutral description of railway meaning. The embedding is a separate authored placement layer for one proof scene. It may realise one semantic junction as multiple ordinary physical turnouts when that better matches the current `RailMovement` runtime.
+
+For the small-town goods station, the west semantic station throat is embedded as:
+- a west yard turnout selecting main route or goods-yard lead;
+- a short authored connector;
+- a west loop turnout selecting platform main or passing loop.
+
+This decomposition is runtime placement detail. It does not add new semantic ontology and does not imply a procedural spatial solver exists.
