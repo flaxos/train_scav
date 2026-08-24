@@ -29,7 +29,17 @@ func _init(sec_def: SectorDefinition, rail_model: RefCounted = null, yard_model:
 		yard = YardOperations.new(rail)
 	else:
 		yard = yard_model
-	pois = SectorPOIs.new(definition.seed_value)
+	if definition != null and definition.is_procedural() and not definition.runtime_layout.is_empty():
+		var configure_result: Dictionary = rail.configure_track_layout(definition.runtime_layout)
+		if not bool(configure_result.get("valid", false)):
+			push_error("Generated sector runtime layout rejected: %s" % str(configure_result.get("diagnostics", [])))
+		rail.detached_consists = definition.detached_consists.duplicate(true)
+		if yard != null and yard.has_method("sync_points_from_rail_layout"):
+			yard.sync_points_from_rail_layout()
+	if definition != null and not definition.poi_definitions.is_empty():
+		pois = SectorPOIs.new(definition.seed_value, definition.poi_definitions)
+	else:
+		pois = SectorPOIs.new(definition.seed_value)
 
 
 func is_exit_crossed() -> bool:

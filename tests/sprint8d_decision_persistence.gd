@@ -55,7 +55,8 @@ func test_physical_route_branch_changes_next_sector_state_and_preserves_workshop
 	_expect(lifecycle.run_state.sector_index == 2, "final departure enters the next sector")
 	_expect(lifecycle.current_sector.rail.active_units.has("W"), "recovered workshop persists in the train after transition")
 	_expect(resources.get_amount(TrainResources.RESOURCE_DIESEL) < diesel_before, "final departure still consumes diesel")
-	_expect(str(lifecycle.current_sector.definition.template_name).contains("Industrial"), "physical branch route alters the next sector template/profile")
+	_expect(str(lifecycle.current_sector.definition.source_type) == "PROCEDURAL", "final departure now enters a production procedural sector")
+	_expect(str(lifecycle.current_sector.definition.route_profile) == "industrial", "physical branch route alters the generated sector profile")
 
 
 func _option_has_exit_segment(options: Array[Dictionary], route_id: String) -> bool:

@@ -1,122 +1,142 @@
-# Current Sprint - Sprint 9G: First Procedural Semantic Railway Topology
+# Current Sprint - Sprint 9: Production Procedural Sectors
 
-**Status:** IMPLEMENTED - REVIEW READY
+**Status:** IMPLEMENTED - FINAL HUMAN UAT PENDING
 
 ## Hypothesis
-Using only deterministic generation inputs and named RNG streams, the project can generate multiple valid semantic members of one researched railway archetype without authored per-sector topology and without touching runtime geometry.
+After the existing authored/demo opening sectors, the normal production `SectorLifecycle` can deterministically request procedural railway sectors from the Sprint 9 generator using run seed, sector index and generation identity. The generated sectors become real `SectorDefinition`/`SectorInstance` objects and reuse the existing train, crew, resource, scavenging, rolling-stock and irreversible departure systems.
 
-Sprint 9G generates only:
+Sprint 9 is complete only after the normal-game human UAT below passes. Do not create Sprint 9H, 9I or further railway-generator foundation work.
+
+## Authored -> Procedural Boundary
+The crafted opening remains intact:
 
 ```text
-village_passing_station
+sector 0: authored departure yard
+sector 1: authored forward industrial yard / route choice
+sector 2+: deterministic procedural sectors
 ```
 
-The implemented pipeline is:
+`SectorDefinitionProvider.FIRST_PROCEDURAL_SECTOR_INDEX` is the explicit handoff boundary.
+
+## Implemented Production Pipeline
 
 ```text
-GenerationRequest
-  -> GenerationContext
-  -> topology/world_entities RNG streams
+RunState
+  -> SectorLifecycle
+  -> SectorDefinitionProvider
+  -> authored SectorDefinition when sector_index < 2
+  -> WorldgenProductionSectorGenerator when sector_index >= 2
+  -> WorldgenGenerationRequest / WorldgenGenerationContext
+  -> STREAM_ARCHETYPE selection
   -> WorldgenSemanticGenerator
   -> SectorBlueprint
   -> WorldgenSchemaValidator
-  -> valid generated semantic blueprint
+  -> WorldgenProceduralSpatialEmbedding
+  -> WorldgenRuntimeReconstructor
+  -> generated SectorDefinition
+  -> SectorInstance
+  -> RailMovement.configure_track_layout()
+  -> normal gameplay
 ```
 
-There is no spatial embedding, runtime reconstruction, `RailMovement` integration or sector-lifecycle integration in 9G.
+`SectorLifecycle` still owns departure validation, diesel cost, previous-sector disposal, train transfer, crew relinking and run-journal recording. Worldgen only supplies the next sector definition/content.
 
-## In Scope
-1. `WorldgenSemanticGenerator` for one semantic archetype: `village_passing_station`.
-2. Deterministic generated IDs and generated semantic graph data.
-3. Validation of every successful output through the Sprint 9C semantic validator.
-4. Stable generated `SectorBlueprint` canonical hashes for identical generation requests.
-5. Stable generation traces with appended 9G stage decisions.
-6. Focused tests for determinism, validation, stream isolation, version mismatch and restrained variation.
+## Procedural Archetypes
+Sprint 9 production generation supports three bounded railway forms:
 
-## Version Contract
-The generated semantic blueprint keeps the existing validator-compatible field:
+| Archetype | Gameplay role |
+| --- | --- |
+| `rural_through` | Sparse travel-through sector with active entry -> exit railway. |
+| `village_passing_station` | Through route with genuine double-ended passing loop and station/platform semantics. |
+| `small_town_goods` | Through route plus connected goods/loading track and existing rolling-stock salvage opportunity. |
 
-```text
-generator_version: 9a_schema_v1
-```
+Deferred procedural archetypes remain deferred: agricultural loading, river-valley constrained, and declining/abandoned branch.
 
-The actual 9G semantic generation algorithm is identified by:
+## Determinism
+Generation identity includes:
+- run seed;
+- sector index;
+- route profile;
+- region pack;
+- grammar version;
+- generator version.
 
-```text
-WorldgenSemanticGenerator.GENERATOR_VERSION = 9g_village_passing_station_semantic_v1
-```
+Named RNG stream ownership:
+- `archetype`: selects one of the three supported production forms;
+- `topology`: semantic railway decisions;
+- `world_entities`: station/settlement/freight relationship choices;
+- `spatial`: bounded physical layout choices;
+- `pois`: generated searchable opportunities using existing `SectorPOIs`;
+- `rolling_stock`: existing-type detached wagon placement for goods sectors;
+- `decoration`: not used for gameplay state and proven not to perturb generated results.
 
-`WorldgenGenerationRequest.generator_version` must match this 9G value before generation. A mismatch returns a structured `GENERATOR_VERSION_MISMATCH` diagnostic and no blueprint.
+## Existing Gameplay Reuse
+- Generated track is configured through `WorldgenRuntimeReconstructor` -> `RailMovement.configure_track_layout()`.
+- Generated POIs are loaded into `SectorPOIs`; searching still follows discover -> carry -> deposit -> owned resource.
+- Every generated production sector includes enough obtainable diesel in POIs to satisfy the next departure cost from a low-diesel entry state.
+- Generated goods rolling stock uses existing wagon type prefixes and is placed as detached rail state; ownership still requires physical coupling through `RailMovement`.
+- `FirstRunScenario` skips authored-scenario mutation for procedural definitions so generated sector content is not overwritten.
 
-## RNG Ownership
-9G uses named streams conservatively:
-
-- `topology` owns rail-semantic variation such as `platform_track`.
-- `world_entities` owns world-relationship variation such as optional station road access.
-
-9G does not use spatial choices such as loop side or station side, because no geometry or spatial hint is generated in this sprint.
-
-`make_rng()` returns fresh deterministic streams, so consuming `decoration` or `world_entities` outside the generator does not perturb topology-owned decisions.
-
-## Generated Grammar
-The generated village passing station contains:
-
-- one `ENTRY`;
-- one `EXIT`;
-- active entry-to-exit railway connectivity;
-- one double-ended `PASSING_LOOP`;
-- station, platform and settlement entities;
-- `PLATFORM_SERVES_TRACK` targeting either the station main or passing loop;
-- optional road access relationship owned by `world_entities`.
-
-It does not create goods yards, industries, agricultural loading, water crossings, abandoned branches or geometry.
+## Sprint 9 Increment Summary
+- 9A: source-neutral railway/world grammar, schema and reference fixtures.
+- 9B: immutable `SectorBlueprint`, canonical hashes and six authored archetypes.
+- 9C: semantic/topological validation with structured diagnostics.
+- 9D: one authored blueprint plus authored embedding reconstructed into `RailMovement`.
+- 9E: all six authored archetypes reconstructed through the same runtime path.
+- 9F: deterministic generation request/context, named RNG streams and trace metadata.
+- 9G: first generated semantic railway, `village_passing_station`, validated through 9C.
+- Final closeout: production sector lifecycle automatically enters deterministic procedural sectors after the authored opening.
 
 ## Automated Acceptance
-- [x] Wrong generator identity is rejected with `GENERATOR_VERSION_MISMATCH`.
-- [x] Same complete request produces identical blueprint hash, trace hash and decisions.
-- [x] Generated blueprint keeps semantic `generator_version: 9a_schema_v1`.
-- [x] Generation trace records `generator_version: 9g_village_passing_station_semantic_v1`.
-- [x] Generated blueprint validates through the Sprint 9C validator.
-- [x] Generated graph has entry-to-exit connectivity and a true passing loop.
-- [x] Generated graph has station, platform and settlement semantics.
-- [x] World relationships resolve and platform references a usable active track.
-- [x] Generation trace appends 9G decisions rather than replacing existing decisions.
-- [x] Consuming `decoration` does not change generated topology or trace.
-- [x] Consuming `world_entities` does not change topology-owned rail graph hash or platform decision.
-- [x] A 150-request semantic sweep validates and produces restrained variation.
-- [x] The generator does not load or clone the authored village fixture.
+- [x] Existing authored sector 0 and sector 1 remain selected before the handoff.
+- [x] Sector index 2+ is selected through the procedural provider.
+- [x] Same seed/index reproduces archetype, blueprint hash, trace hash, spatial embedding hash, runtime topology hash, POI signature and rolling-stock signature.
+- [x] Known deterministic sample covers all three supported archetypes.
+- [x] A 120-sector generated sweep validates semantics, reconstructs runtime layouts and drives entry -> exit.
+- [x] Decoration stream pre-consumption does not alter generated gameplay output.
+- [x] Rural, village and goods procedural sectors include enough obtainable diesel to avoid mandatory-departure fuel softlocks.
+- [x] A low-diesel authored -> rural procedural handoff can refuel through normal search, carry, deposit and return-crew flow.
+- [x] Generated goods sector places existing rolling stock off the main and recovers it only by physical coupling.
+- [x] Production lifecycle test covers authored -> procedural and procedural -> procedural transitions.
+- [x] Persistent consist, controlled power, crew, survivor needs/skills and resources survive transitions.
+- [x] Previous sectors are disposed and cannot be revisited.
+- [x] Normal `Main.tscn` reports procedural source, archetype and blueprint hash.
 
-## Developer Acceptance
-No gameplay UAT is required for 9G because it creates semantic topology only.
+## Human UAT Required
+Sprint 9 can be marked complete after this normal-game UAT passes:
 
-Developer acceptance is to inspect printed generated summaries, for example:
+1. Launch the normal production game from `res://scenes/bootstrap/Main.tscn`.
+2. Start a fresh run with a known seed.
+3. Play through authored sector 0 and confirm the departure yard behaves as before.
+4. Depart normally to authored sector 1 and recover/activate the workshop wagon as before.
+5. Cross one route exit in sector 1 and depart normally.
+6. Confirm sector 2 is automatically generated without using a debug regenerate command.
+7. Confirm debug state shows the same run seed, sector index `2`, `PROCEDURAL`, selected archetype and blueprint hash.
+8. Confirm the same locomotive, consist, survivors and owned resources persisted.
+9. Reverse toward the old boundary and confirm the authored sector cannot be revisited.
+10. Drive/explore the generated sector normally.
+11. If the archetype is `village_passing_station`, operate the passing route and use the station POI through normal scavenging.
+12. If the archetype is `small_town_goods`, enter the goods/loading track and recover the generated wagon through existing coupling/shunting.
+13. Return all crew to the train and depart normally.
+14. Confirm sector 3 is another procedural sector, sector index increments and persistent state survives again.
+15. Restart with the same seed and confirm the same procedural sector chain identities reproduce.
+16. Start or test another known seed and confirm materially different procedural topology/archetype occurs.
 
-```text
-seed 100: hash=... platform_track=station_main road_access=true
-seed 101: hash=... platform_track=passing_loop road_access=false
-seed 102: hash=... platform_track=passing_loop road_access=false
-```
-
-The same seed must reproduce exactly, different seeds may show restrained semantic variation, and all generated blueprints must validate.
+Use a goods-producing seed for at least one UAT pass so existing shunting/coupling is proven inside a procedural sector.
 
 ## Explicit Exclusions
-Do not implement in Sprint 9G:
+Do not implement as part of Sprint 9:
+- new wagon ecosystem/types;
+- multiple powered locomotives;
+- procedural agricultural, river-valley or abandoned-branch generators;
+- generic graph layout or constraint solving;
+- terrain, rivers, roads, bridges, towns or generated world geometry;
+- POI/resource system replacement;
+- rolling-stock ownership shortcuts;
+- shunting-solvability search;
+- save/load changes;
+- UI/art/audio polish;
+- Sprint 10 work.
 
-- procedural spatial embedding;
-- random coordinates or geometry;
-- runtime reconstruction of generated sectors;
-- `RailMovement` changes;
-- scene or harness changes;
-- production `SectorDefinition` integration;
-- active `SectorLifecycle` integration;
-- procedural goods yards, industrial spurs, agricultural loading, river valleys or abandoned branches;
-- terrain, roads or rivers as physical geometry;
-- POIs/resources;
-- rolling-stock placement;
-- decay/damage mutations;
-- gameplay problems;
-- shunting solvability;
-- save/load changes.
-
-## Next Possible Increment
-Future work may add authored/procedural spatial embedding for generated blueprints or broaden semantic generation to another researched archetype, but only after an explicit sprint plan promotes that work.
+## Next Roadmap Item
+After human UAT passes, Sprint 9 is complete and the roadmap moves to Sprint 10 - Rolling-stock ecosystem.

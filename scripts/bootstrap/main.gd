@@ -173,6 +173,12 @@ func get_compact_debug_lines() -> Array[String]:
 	var sector_visual := get_sector_visual_state()
 	var sec_id: String = str(sector_visual.get("sector_id", "sector_a"))
 	var sec_name: String = str(sector_visual.get("display_name", sec_id))
+	var source_type: String = str(sector_visual.get("source_type", "AUTHORED"))
+	var archetype_id: String = str(sector_visual.get("archetype_id", ""))
+	var sector_index := int(sector_visual.get("sector_index", 0))
+	var run_seed := int(sector_visual.get("run_seed", 0))
+	var blueprint_hash := str(sector_visual.get("blueprint_hash", ""))
+	var generator_version := str(sector_visual.get("generator_version", ""))
 	var elapsed_time := 0.0
 	if lifecycle != null and lifecycle.current_sector != null:
 		elapsed_time = lifecycle.current_sector.get_elapsed_time()
@@ -183,7 +189,16 @@ func get_compact_debug_lines() -> Array[String]:
 			train_resources.get_amount(TrainResources.RESOURCE_FOOD),
 			train_resources.get_amount(TrainResources.RESOURCE_PARTS),
 		]
-	lines.append("Sector: %s  Time: %.0fs  Stock: %s  Auto: %s" % [sec_name, elapsed_time, stock, auto_label])
+	var sector_line := "Sector: %s  Time: %.0fs  Stock: %s  Auto: %s" % [sec_name, elapsed_time, stock, auto_label]
+	lines.append(sector_line)
+	if source_type == SectorDefinition.SOURCE_PROCEDURAL:
+		lines.append("Worldgen: PROCEDURAL  Run:%d  Idx:%d  Archetype:%s  Hash:%s  Gen:%s" % [
+			run_seed,
+			sector_index,
+			archetype_id,
+			blueprint_hash.substr(0, 12),
+			generator_version,
+		])
 	if scenario != null:
 		var objective := _get_current_objective_text()
 		var departure_blocker := _get_departure_blocker_text()
@@ -267,9 +282,15 @@ func get_sector_visual_state() -> Dictionary:
 			"sector_id": "",
 			"template_name": "",
 			"sector_index": 0,
+			"run_seed": 0,
+			"sector_seed": 0,
 			"display_name": "",
 			"entry_label": "",
 			"accent_color": Color(0.35, 0.95, 0.85, 0.9),
+			"source_type": "",
+			"archetype_id": "",
+			"blueprint_hash": "",
+			"generator_version": "",
 		}
 
 	var def: SectorDefinition = lifecycle.current_sector.definition
@@ -277,6 +298,8 @@ func get_sector_visual_state() -> Dictionary:
 		"sector_id": def.sector_id,
 		"template_name": def.template_name,
 		"sector_index": def.sector_index,
+		"run_seed": lifecycle.run_state.run_seed,
+		"sector_seed": def.seed_value,
 		"display_name": def.display_name,
 		"entry_label": def.entry_label,
 		"accent_color": def.accent_color,
@@ -285,6 +308,10 @@ func get_sector_visual_state() -> Dictionary:
 		"exit_segment": def.exit_segment,
 		"exit_distance": def.exit_distance,
 		"route_exits": def.route_exits.duplicate(true),
+		"source_type": def.source_type,
+		"archetype_id": def.archetype_id,
+		"blueprint_hash": def.blueprint_hash,
+		"generator_version": def.generator_version,
 	}
 
 
@@ -553,6 +580,8 @@ func get_track_visual_style() -> Dictionary:
 
 
 func get_switch_route_visual_states() -> Array[Dictionary]:
+	if not _is_default_authored_runtime_layout():
+		return _get_generic_switch_route_visual_states()
 	var p1_active_kind := _route_kind_from_route(rail.points_route)
 	var p2_active_kind := _route_kind_from_route(rail.get_yard_point_route(YardOperations.POINT_P2))
 	var p3_active_kind := _route_kind_from_route(rail.get_yard_point_route(YardOperations.POINT_P3))
@@ -650,6 +679,23 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 			],
 		},
 	]
+
+
+func _get_generic_switch_route_visual_states() -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	for point_id in yard.get_point_ids():
+		var point_state := yard.get_point_state(point_id)
+		var position := point_state.get("track_position", point_state.get("anchor", Vector2.ZERO)) as Vector2
+		var route := str(point_state.get("route", ""))
+		states.append({
+			"point_id": point_id,
+			"position": position,
+			"control_label": "%s route %s" % [point_id, route],
+			"label_position": position + Vector2(-62.0, -42.0),
+			"active_kind": _route_kind_from_route(route),
+			"options": [],
+		})
+	return states
 
 
 func get_current_uat_step_index() -> int:
@@ -942,21 +988,17 @@ func _draw_yard_auxiliary_tracks() -> void:
 
 
 func _draw_switch() -> void:
-	var switch_color := ROUTE_MAIN_COLOR
-	if rail.points_route == RailMovement.POINTS_SIDING:
-		switch_color = ROUTE_SIDING_COLOR
-
-	_draw_track_switch_icon(RailMovement.SWITCH_POSITION, switch_color, "P1")
 	for point_id in yard.get_point_ids():
-		if point_id == YardOperations.POINT_P1:
-			continue
 		var point_state := yard.get_point_state(point_id)
 		var color := ROUTE_MAIN_COLOR
-		if str(point_state.get("route", "")) != YardOperations.ROUTE_MAIN:
+		if str(point_state.get("route", "")) != YardOperations.ROUTE_MAIN and str(point_state.get("route", "")) != RailMovement.POINTS_MAIN:
 			color = ROUTE_SIDING_COLOR
 		if str(point_state.get("mechanical_state", "")) == YardOperations.MECHANICAL_DAMAGED:
 			color = Color(0.72, 0.20, 0.18, 1.0)
-		_draw_track_switch_icon(point_state.get("track_position", point_state.get("anchor", Vector2.ZERO)) as Vector2, color, point_id)
+		var position := point_state.get("track_position", point_state.get("anchor", Vector2.ZERO)) as Vector2
+		if point_id == YardOperations.POINT_P1 and not point_state.has("track_position"):
+			position = RailMovement.SWITCH_POSITION
+		_draw_track_switch_icon(position, color, point_id)
 	_draw_switch_route_labels()
 
 
@@ -1730,6 +1772,13 @@ func _route_kind_from_route(route: String) -> String:
 	if route == RailMovement.POINTS_MAIN or route == YardOperations.ROUTE_MAIN:
 		return "straight"
 	return "branch"
+
+
+func _is_default_authored_runtime_layout() -> bool:
+	if rail == null or not rail.has_method("get_runtime_topology_snapshot"):
+		return true
+	var snapshot: Dictionary = rail.get_runtime_topology_snapshot()
+	return str(snapshot.get("layout_id", "")) == "default_authored_yard"
 
 
 func _format_route_option_label(kind: String, destination: String, active: bool) -> String:

@@ -30,7 +30,9 @@ Sprint 9 should progress through gated increments:
   ↓
 9G: one-archetype procedural semantic topology only
   ↓
-9H+: procedural embedding, broader archetypes, POIs, rolling stock, problems, solvability and UAT
+Sprint 9 closeout: generated procedural sector definitions enter the normal production lifecycle after authored sectors 0 and 1
+  ↓
+Sprint 10+: rolling-stock ecosystem
 ```
 
 Sprint numbering after 9C may be revised by an explicit sprint plan, but 9C itself is only semantic validation.
@@ -193,12 +195,57 @@ Requests with any other `generator_version` are rejected with `GENERATOR_VERSION
 
 No spatial side/orientation decisions are recorded in 9G because no spatial embedding exists yet. 9G appends its stage decisions to any existing trace decisions from the context.
 
-## Future Pipeline Shape
-When generation is explicitly promoted into a later sprint, the likely long-term sector creation shape is:
+## Sprint 9 Closeout Boundary
+Sprint 9 closeout wires the generated railway path into the normal production sector lifecycle while keeping the authored opening intact:
 
 ```text
-run seed
-  -> region/archetype profile
+RunState / sector index
+  -> SectorLifecycle
+  -> SectorDefinitionProvider
+  -> authored definition for sector 0 or 1
+  -> procedural generation for sector 2+
+  -> WorldgenGenerationRequest
+  -> WorldgenGenerationContext
+  -> archetype selection
+  -> WorldgenSemanticGenerator
+  -> generated SectorBlueprint
+  -> WorldgenSchemaValidator
+  -> WorldgenProceduralSpatialEmbedding
+  -> WorldgenRuntimeReconstructor
+  -> generated SectorDefinition
+  -> SectorInstance
+  -> RailMovement.configure_track_layout()
+  -> normal gameplay
+```
+
+`WorldgenProceduralSpatialEmbedding` is not a generic graph layout solver. It contains small deterministic physical placement grammars for the three Sprint 9 production forms:
+- `rural_through`;
+- `village_passing_station`;
+- `small_town_goods`.
+
+It consumes only the `spatial` RNG stream and emits the same embedding contract already proven in 9D/9E.
+
+Meaning remains layered:
+- `archetype` RNG selects the bounded sector form;
+- semantic generation decides what railway/world graph exists;
+- semantic validation rejects nonsensical generated meaning;
+- spatial embedding decides where that fixed graph is placed physically;
+- runtime reconstruction translates the embedding into `RailMovement`;
+- `RailMovement` remains the live movement, turnout and train authority.
+
+Generated spatial decisions are appended to the existing generation trace under `stage: spatial_embedding`. They do not replace 9G semantic decisions.
+
+Generated POIs are initial `SectorPOIs` state. Every production procedural sector includes enough obtainable diesel in generated POIs to pay the next departure cost from a low-diesel entry state, but this is not granted directly: resource ownership still happens only through the existing search -> haul -> deposit loop. Generated goods rolling stock is initial detached `RailMovement` state using existing wagon type metadata, and wagon ownership still happens only through physical coupling.
+
+The isolated closeout harness remains useful for debugging generated railways, but final Sprint 9 acceptance is through the normal production entry point.
+
+## Future Pipeline Shape
+Later worldgen work may extend the production sector creation shape to more content:
+
+```text
+run seed + sector index
+  -> route/region profile
+  -> deterministic archetype selection
   -> deterministic semantic generation
   -> semantic rail graph
   -> world relationship graph
@@ -302,6 +349,17 @@ Do not implement these in 9G:
 - shunting-solvability search;
 - save/load changes.
 
+## Deferred After Sprint 9 Closeout
+Do not treat Sprint 9 closeout as permission to implement:
+- additional generated railway archetypes beyond rural-through, village-passing and small-town-goods;
+- generic graph layout or constraint solving;
+- procedural agricultural loading, abandoned branches or river valleys;
+- terrain, roads, bridges, towns or POIs as generated geometry;
+- new rolling-stock ecosystem content;
+- damage/gameplay-problem generation;
+- production `SectorLifecycle` replacement;
+- save/load changes.
+
 ## Validation Direction
 9B validation is intentionally cheap:
 - all six reference archetype files parse;
@@ -315,4 +373,4 @@ Do not implement these in 9G:
 
 9C validation adds semantic diagnostic codes and IDs for invalid topology/world relationships while staying geometry-free.
 
-9F adds golden-tested generator seed contracts and trace determinism. Later validation should add generated semantic graph validity, geometry bounds, turnout continuity, rolling-stock overlap checks, crew reachability and bounded shunting recovery witnesses.
+9F adds golden-tested generator seed contracts and trace determinism. Sprint 9 production closeout adds generated semantic graph validity, bounded spatial reconstruction, runtime configuration, entry-to-exit movement, lifecycle handoff, deterministic content signatures and generated-departure-diesel solvability through existing POI/resource ownership. Later validation should add terrain bounds, generated world-geometry checks, richer rolling-stock overlap checks, crew reachability and bounded shunting recovery witnesses.

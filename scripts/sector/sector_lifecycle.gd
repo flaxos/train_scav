@@ -7,6 +7,7 @@ class_name SectorLifecycle
 
 const RunState := preload("res://scripts/run/run_state.gd")
 const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
+const SectorDefinitionProvider := preload("res://scripts/sector/sector_definition_provider.gd")
 const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
@@ -19,21 +20,25 @@ var crew: RefCounted
 var task_broker: RefCounted
 var train_resources: TrainResources
 var scenario_coordinator: RefCounted
+var sector_definition_provider: RefCounted
 
 var is_transitioning: bool = false
 var transition_blocked_reason: String = ""
 
 
-func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCounted = null, resource_store: TrainResources = null) -> void:
+func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCounted = null, resource_store: TrainResources = null, provider: RefCounted = null) -> void:
 	run_state = RunState.new(initial_seed)
 	crew = crew_sim
 	task_broker = broker
+	sector_definition_provider = provider
+	if sector_definition_provider == null:
+		sector_definition_provider = SectorDefinitionProvider.new()
 	if resource_store == null:
 		train_resources = TrainResources.new()
 	else:
 		train_resources = resource_store
 
-	var initial_def := SectorDefinition.create_for_index(run_state.run_seed, run_state.sector_index)
+	var initial_def := _create_sector_definition(run_state.sector_index)
 	var rail_inst: RefCounted = null
 	var yard_inst: RefCounted = null
 	if crew != null:
@@ -94,6 +99,12 @@ func request_transition() -> bool:
 		return false
 
 	is_transitioning = true
+	var next_index := run_state.sector_index + 1
+	var next_def := _create_sector_definition(next_index)
+	if next_def == null:
+		transition_blocked_reason = "Departure blocked: procedural sector generation failed"
+		is_transitioning = false
+		return false
 	if train_resources != null:
 		if not train_resources.consume(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
 			transition_blocked_reason = "Departure blocked: need %.0f diesel (have %.0f)" % [
@@ -111,8 +122,6 @@ func request_transition() -> bool:
 	var powered_conditions: Dictionary = old_sector.rail.powered_unit_conditions.duplicate()
 
 	# 2. Build next sector definition and new disposable environment
-	var next_index := run_state.sector_index + 1
-	var next_def := SectorDefinition.create_for_index(run_state.run_seed, next_index)
 	var new_rail := RailMovement.new()
 	var new_yard := YardOperations.new(new_rail)
 	var new_sector := SectorInstance.new(next_def, new_rail, new_yard)
@@ -177,13 +186,17 @@ func get_sector_state() -> Dictionary:
 		"consist_order": consist,
 		"blocked_reason": transition_blocked_reason,
 		"resources": train_resources.get_all() if train_resources != null else {},
+		"source_type": current_sector.definition.source_type if current_sector != null and current_sector.definition != null else "",
+		"archetype_id": current_sector.definition.archetype_id if current_sector != null and current_sector.definition != null else "",
+		"blueprint_hash": current_sector.definition.blueprint_hash if current_sector != null and current_sector.definition != null else "",
+		"generator_version": current_sector.definition.generator_version if current_sector != null and current_sector.definition != null else "",
 	}
 
 
 func get_sector_debug_lines() -> Array[String]:
 	var st := get_sector_state()
 	return [
-		"Sector: %s (%s)  Seed: %d  Idx: %d" % [st["sector_id"], st["template_name"], st["seed"], st["sector_index"]],
+		"Sector: %s (%s)  Seed: %d  Idx: %d  %s" % [st["sector_id"], st["template_name"], st["seed"], st["sector_index"], str(st.get("source_type", ""))],
 		"Transitions: %d  Prev Disposed: %s" % [st["transition_count"], str(st["previous_sector_disposed"])],
 	]
 
@@ -202,3 +215,12 @@ func _prepare_scenario_departure_context() -> void:
 	if current_sector != null and current_sector.has_method("get_crossed_exit"):
 		crossed_exit = current_sector.get_crossed_exit()
 	scenario_coordinator.prepare_departure_for_exit(crossed_exit)
+
+
+func _create_sector_definition(sector_index: int) -> SectorDefinition:
+	var route_profile := run_state.next_sector_profile
+	if route_profile.is_empty():
+		route_profile = "forward"
+	if sector_definition_provider != null and sector_definition_provider.has_method("create_definition"):
+		return sector_definition_provider.create_definition(run_state.run_seed, sector_index, route_profile)
+	return SectorDefinition.create_for_index(run_state.run_seed, sector_index)

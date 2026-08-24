@@ -143,3 +143,34 @@ Allowed 9G variation is deliberately small:
 - `world_entities` may choose whether simple road access is present.
 
 9G does not generate loop side, station side, physical road geometry, coordinates, goods yards, agricultural loading, river crossings or abandoned branches.
+
+## Sprint 9 Production Procedural Sectors
+Sprint 9 final production integration keeps the authored opening intact, then generates sector index 2 and beyond through the normal lifecycle.
+
+The production semantic generator supports three bounded procedural railway forms:
+
+| Archetype | Semantic grammar |
+| --- | --- |
+| `rural_through` | `ENTRY -> rural_main -> EXIT`, with a simple wayside world relationship. |
+| `village_passing_station` | `ENTRY -> approach main -> west loop switch -> station main or passing loop -> east loop switch -> exit main -> EXIT`, with station/platform/settlement semantics. |
+| `small_town_goods` | Through main plus passing/platform track, connected goods-yard lead, loading track, headshunt/buffer semantics and freight-facility relationship. |
+
+The production spatial generator:
+- consumes only the `spatial` RNG stream;
+- emits the same embedding contract used by authored Sprint 9D/9E embeddings;
+- maps generated semantic edges to runtime segments;
+- may decompose a semantic station/goods throat into ordinary runtime turnouts and short connectors;
+- keeps route presets as metadata for setting ordinary turnout routes.
+
+Allowed physical variation remains bounded:
+- rural main length class;
+- loop side north/south for loop-based sectors;
+- approach length class;
+- station/platform length class;
+- exit length class;
+- loop offset class;
+- goods/loading length and yard offset class for goods sectors.
+
+Generated POIs are initial `SectorPOIs` state and use existing search/carry/deposit ownership rules. Each production procedural archetype includes enough obtainable diesel in generated POIs to satisfy the next departure cost after normal hauling and deposit; goods sectors also keep a parts cache for the freight/goods context. Generated goods rolling stock is initial detached `RailMovement` state using existing wagon type prefixes; it becomes owned only through existing physical coupling.
+
+Sprint 9 does not generate terrain, settlements as geometry, roads, rivers, bridges, agricultural sites or abandoned branches. The generated debug harness remains useful, but final acceptance is through the normal production game.

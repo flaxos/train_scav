@@ -180,10 +180,7 @@ Only after the vertical slice is fun, Phase C should deepen the systems that mak
 
 | Sprint | Focus | Why now |
 | --- | --- | --- |
-| 9A | Railway grammar research & schema | Converts deep research into source-neutral, versioned docs, JSON schema, fixtures and validation before implementation. |
-| 9B | Semantic blueprint archetype coverage | Proves six researched authored archetypes share one immutable blueprint API before generation. |
-| 9C | Semantic railway topology validation | Rejects nonsensical semantic graphs with diagnostics before geometry or runtime railway objects exist. |
-| 9D | Deterministic semantic railway generation | Produces seed-derived railway/world meaning while staying independent of physical geometry. |
+| 9 | Production procedural railway sectors | Wires the proven Sprint 9 generator into the normal sector lifecycle after the authored opening, with three bounded procedural railway forms. |
 | 10 | Rolling-stock ecosystem | Gives generated yards meaningful things to contain and recover. |
 | 11 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock variety exists. |
 | 12 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
@@ -196,7 +193,20 @@ Only after the vertical slice is fun, Phase C should deepen the systems that mak
 
 ### Sprint 9 — Procedural Railway & World Grammar
 
-Sprint 9 is split into gated increments so procedural variety does not rewrite validated railway gameplay in one large step.
+Sprint 9 was implemented as gated increments so procedural variety did not rewrite validated railway gameplay in one large step.
+
+Status:
+> Implemented - final normal-game human UAT pending.
+
+Sprint 9 increments:
+- 9A: railway/world grammar research, schema and fixtures;
+- 9B: immutable `SectorBlueprint` and six authored semantic archetypes;
+- 9C: semantic/topological validation with structured diagnostics;
+- 9D: one authored blueprint plus authored spatial embedding reconstructed into `RailMovement`;
+- 9E: all six authored archetypes reconstructed through the same runtime path;
+- 9F: deterministic generation request/context, named RNG streams and generation trace;
+- 9G: first generated semantic railway, `village_passing_station`;
+- closeout: production `SectorLifecycle` handoff after the authored opening -> deterministic procedural `SectorDefinition` -> generated `SectorInstance` -> existing gameplay systems.
 
 9A acceptance:
 > The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
@@ -207,8 +217,10 @@ Sprint 9 is split into gated increments so procedural variety does not rewrite v
 9C acceptance:
 > Semantic blueprints with nonsensical railway topology or world relationships are rejected with useful diagnostic codes and IDs while all six Sprint 9B authored archetypes still validate and the active playable sector lifecycle remains unchanged.
 
-9D acceptance:
-> Fixed generated-sector seeds produce deterministic, visibly different and solvable travel -> stop -> explore -> shunt -> depart opportunities while preserving Sprint 1-8 regression behavior.
+Final Sprint 9 acceptance:
+> After authored sectors 0 and 1, the normal production game automatically creates deterministic procedural sectors from run seed, sector index and generation identity. Generated sectors support rural-through, village-passing and small-town-goods railway forms, validate semantic graphs before use, reconstruct through the existing runtime pipeline, preserve the persistent train/crew/resources/consist, reuse existing scavenging and physical coupling/shunting systems, dispose previous sectors irreversibly, and reproduce the same sector chain for the same seed.
+
+Sprint 9 does not implement terrain generation, additional procedural archetypes, a shunting solver, new wagon ecosystem content, save/load changes or a replacement production sector lifecycle.
 
 ## Phase D — Demo
 
