@@ -26,7 +26,9 @@ Sprint 9 should progress through gated increments:
   ↓
 9E: all six authored reference blueprints plus authored embeddings reconstructed into RailMovement
   ↓
-9F+: deterministic semantic generation, broader procedural embedding, POIs, rolling stock, problems, solvability and UAT
+9F: deterministic generation request/context/RNG trace infrastructure only
+  ↓
+9G+: semantic generation, broader procedural embedding, POIs, rolling stock, problems, solvability and UAT
 ```
 
 Sprint numbering after 9C may be revised by an explicit sprint plan, but 9C itself is only semantic validation.
@@ -112,6 +114,56 @@ Route presets are optional harness metadata that set ordinary point routes. They
 
 9E does not make `SectorDefinition`, `SectorLifecycle` or production `Main.tscn` use semantic reconstruction.
 
+## Sprint 9F Boundary
+9F adds deterministic worldgen infrastructure above semantic generation:
+
+```text
+GenerationRequest
+  -> GenerationContext
+  -> named deterministic RNG streams
+  -> GenerationTrace
+```
+
+It does not choose archetypes, construct random rail topology, produce spatial embeddings, generate terrain or alter the active sector lifecycle.
+
+Each request records:
+- `run_seed`;
+- `sector_index`;
+- `route_profile`;
+- `region_pack`;
+- `grammar_version`;
+- `generator_version`.
+
+The request `generator_version` is generation identity metadata for future procedural output. It does not replace the authored Sprint 9A fixture `generator_version` currently checked by `WorldgenSchemaValidator`.
+
+Named streams are:
+- `archetype`;
+- `topology`;
+- `spatial`;
+- `terrain`;
+- `world_entities`;
+- `pois`;
+- `rolling_stock`;
+- `gameplay_problem`;
+- `decay`;
+- `decoration`.
+
+Calling `make_rng("topology")` returns a fresh deterministic stream reset to the topology subseed. Consuming `decoration`, `terrain` or any other stream cannot perturb topology because stream seeds derive from generation identity and stream name, not construction or draw order.
+
+Subseed derivation is intentionally fixed:
+1. Build seed material containing namespace `train_scav_worldgen_stream_seed_v1`, full generation identity and stream name.
+2. Serialize that dictionary with `WorldgenCanonical.canonical_stringify()`.
+3. Hash the UTF-8 canonical string with SHA-256.
+4. Read SHA-256 digest bytes `0..7` in digest order as an unsigned big-endian integer.
+5. Reduce modulo `2147483646`.
+6. Add `1`, producing a seed in `1..2147483646`.
+
+The project-owned worldgen stream is a Park-Miller LCG using multiplier `48271` and modulus `2147483647`. Its range contracts are:
+- `next_int()` returns `1..2147483646`;
+- `next_float()` returns `[0.0, 1.0)`;
+- `range_int(min, max)` is inclusive of both integer bounds;
+- `range_float(min, max)` returns `[min, max)`.
+
 ## Future Pipeline Shape
 When generation is explicitly promoted into a later sprint, the likely long-term sector creation shape is:
 
@@ -190,6 +242,23 @@ Do not implement these in 9E:
 - seed sweeps;
 - active `SectorLifecycle` integration.
 
+## Deferred From 9F
+Do not implement these in 9F:
+- procedural archetype selection;
+- procedural railway topology;
+- weighted loops, yards or spurs;
+- random track graphs;
+- procedural spatial embeddings;
+- terrain, generated rivers, roads, bridges, towns or POIs;
+- rolling-stock procedural placement;
+- damage/gameplay mutations;
+- shunting-solvability search;
+- generated railway seed sweeps;
+- active `SectorDefinition` or `SectorLifecycle` integration;
+- save/load changes;
+- route-map gameplay;
+- art changes.
+
 ## Validation Direction
 9B validation is intentionally cheap:
 - all six reference archetype files parse;
@@ -203,4 +272,4 @@ Do not implement these in 9E:
 
 9C validation adds semantic diagnostic codes and IDs for invalid topology/world relationships while staying geometry-free.
 
-Later validation should add generator seed contracts, geometry bounds, turnout continuity, rolling-stock overlap checks, crew reachability and bounded shunting recovery witnesses.
+9F adds golden-tested generator seed contracts and trace determinism. Later validation should add generated semantic graph validity, geometry bounds, turnout continuity, rolling-stock overlap checks, crew reachability and bounded shunting recovery witnesses.

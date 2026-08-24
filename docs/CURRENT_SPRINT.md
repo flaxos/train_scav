@@ -1,119 +1,148 @@
-# Current Sprint - Sprint 9E: Multi-Archetype Runtime Reconstruction
+# Current Sprint - Sprint 9F: Deterministic Worldgen Infrastructure
 
 **Status:** IMPLEMENTED - REVIEW READY
 
 ## Hypothesis
-The same semantic-blueprint -> authored-embedding -> runtime-reconstruction pipeline can represent and physically reconstruct all six researched railway archetypes without archetype-specific `RailMovement` or reconstruction code.
+A world-generation request can own deterministic, versioned and independently reproducible random streams so future procedural topology, terrain, gameplay and decoration can vary without accidentally changing one another.
 
-Sprint 9E proves this breadth pipeline:
-
-```text
-authored semantic fixture
-  -> SectorBlueprint
-  -> Sprint 9C semantic validation
-  -> authored spatial embedding
-  -> WorldgenRuntimeReconstructor
-  -> RailMovement.configure_track_layout()
-  -> dedicated multi-archetype harness
-```
-
-No procedural generation is introduced in 9E.
-
-## Reference Fixtures
-Sprint 9E reconstructs all six Sprint 9B reference archetypes:
+Sprint 9F proves this upper worldgen pipeline only:
 
 ```text
-rural_through
-village_passing_station
-small_town_goods_station
-agricultural_loading_point
-river_valley_constrained
-declining_abandoned_branch
+GenerationRequest
+  -> GenerationContext
+  -> named deterministic RNG streams
+  -> generation trace / reproducibility metadata
 ```
+
+No procedural `SectorBlueprint` generation is introduced in 9F.
 
 ## In Scope
-1. Authored spatial embeddings for the five archetypes not reconstructed in 9D.
-2. A reference embedding registry for all six authored fixtures.
-3. Generic route-preset metadata for the development harness only.
-4. Generic display-only runtime segment metadata for visible non-routable railway.
-5. Display-only `ABANDONED_TRACK` geometry that maps semantic edges without entering the active movement graph.
-6. A dedicated multi-archetype reconstruction harness scene.
-7. Automated reconstruction and representative movement tests across all six archetypes.
+1. Immutable/effectively immutable `WorldgenGenerationRequest` identity data.
+2. `WorldgenGenerationContext` for deterministic stream subseeds and trace construction.
+3. Fresh named RNG stream creation per stream request.
+4. Stable SHA-256 based subseed derivation.
+5. Serializable/canonical `WorldgenGenerationTrace`.
+6. Focused deterministic tests with golden subseeds and trace hash.
+7. Documentation of generator versioning and range semantics.
 
-## Embedding Boundary
-The semantic fixture describes what railway exists and why. The embedding describes where each authored reference layout is physically placed for runtime proof.
+## Generation Identity
+Each request records:
 
-Semantic nodes may be decomposed into multiple ordinary runtime turnouts and short connectors when needed. This remains authored placement data, not a procedural spatial solver.
-
-Route presets are harness convenience metadata only. Applying a preset sets ordinary point routes through `RailMovement.set_point_route()`; it does not introduce a competing routing system.
-
-## Abandoned Track Boundary
-`ABANDONED_TRACK` may be mapped to runtime geometry with `runtime_status: "display_only"`.
-
-Display-only segments:
-- render in the 9E harness;
-- retain semantic edge IDs and roles;
-- are included in deterministic runtime topology metadata;
-- are rejected if an embedding attempts to route active movement into them.
-
-They do not support repair, recommissioning or gameplay interaction in 9E.
-
-## Authority Rules
-- `SectorBlueprint` remains immutable semantic data.
-- `WorldgenRuntimeReconstructor` translates generic embedding data only.
-- `RailMovement` remains the live authority for movement, points, speed, reversing, contact and draw transforms.
-- The active `SectorDefinition`, `SectorInstance`, `SectorLifecycle`, production `main.gd` and production `Main.tscn` path remain unchanged.
-- No rolling stock, POIs, terrain, roads, rivers or gameplay problems are generated from worldgen data in 9E.
-
-## Automated Acceptance
-- [x] All six reference fixtures load and validate through the Sprint 9C validator.
-- [x] All six authored embeddings load separately from semantic fixtures.
-- [x] All six reconstruct through the same `WorldgenRuntimeReconstructor` API.
-- [x] All six configure `RailMovement` through `configure_track_layout()`.
-- [x] Semantic edge IDs map deterministically to runtime segment IDs, including display-only abandoned edges.
-- [x] Blueprint canonical hashes are unchanged by reconstruction.
-- [x] Runtime topology snapshots are deterministic and materially different across archetypes.
-- [x] Rural through reconstructs without fake turnouts.
-- [x] Village, small-town, river-valley and declining loops route through ordinary point settings.
-- [x] Agricultural and small-town loading spurs are reachable and reversible.
-- [x] Declining abandoned branch renders abandoned geometry as non-routable display-only track.
-
-## Human UAT
-Launch:
-
-```bash
-/home/flax/bin/godot --path . scenes/worldgen/Sprint9EMultiArchetypeReconstruction.tscn
+```text
+run_seed
+sector_index
+route_profile
+region_pack
+grammar_version
+generator_version
 ```
 
-Approximate 10-15 minute script:
-1. Use `[` and `]` to cycle all six layouts and confirm they read differently.
-2. Rural through: press `1`, `Space`, and drive west to east.
-3. Village passing station: use `1` for main, reset with `0`, then use `2` for loop.
-4. Small-town goods station: confirm `1` main, `2` loop, `3` goods loading and `4` headshunt.
-5. Agricultural loading point: use `1` main, then reset and use `2` grain loading; stop and reverse out with `R`.
-6. River valley constrained: use `1` main and `2` short loop; confirm no bad joins.
-7. Declining abandoned branch: use `1` active main, `2` active loop and `3` old storage.
-8. Confirm abandoned/disused track is visually distinct and is not treated as ordinary active routing.
-9. Confirm no teleports at reconstructed turnouts.
+`generator_version` is generation identity metadata. It does not change the existing Sprint 9A authored fixture `generator_version` expected by the semantic validator.
+
+## Named Streams
+Sprint 9F defines these independent streams:
+
+```text
+archetype
+topology
+spatial
+terrain
+world_entities
+pois
+rolling_stock
+gameplay_problem
+decay
+decoration
+```
+
+`make_rng(stream_name)` returns a fresh stream reset to that stream's deterministic subseed. Consumers that need continuing state must keep the returned stream explicitly. Creating or consuming one stream must not affect any other stream.
+
+## Stable Subseed Contract
+Subseeds are derived by:
+
+1. Building seed material with namespace `train_scav_worldgen_stream_seed_v1` plus the full generation identity and stream name.
+2. Serializing the material with `WorldgenCanonical.canonical_stringify()`.
+3. Hashing that UTF-8 canonical string with SHA-256.
+4. Reading digest bytes `0..7` in digest order as an unsigned big-endian integer.
+5. Reducing that value modulo `2147483646`.
+6. Adding `1`.
+
+The valid stream seed range is therefore `1..2147483646`. This contract is covered by a golden test vector.
+
+## RNG Range Semantics
+`WorldgenRandomStream` uses a project-owned Park-Miller LCG with multiplier `48271` and modulus `2147483647`.
+
+Range contracts:
+- `next_int()` returns `1..2147483646`.
+- `next_float()` returns `[0.0, 1.0)`.
+- `range_int(min, max)` uses inclusive integer bounds.
+- `range_float(min, max)` returns `[min, max)`.
+
+## Golden Trace Example
+For:
+
+```text
+run_seed: 12345
+sector_index: 7
+route_profile: industrial
+region_pack: central_eu_v1
+grammar_version: central_eu_small_town_station_v1
+generator_version: 9f_deterministic_worldgen_infra_v1
+```
+
+The golden subseeds are:
+
+```text
+archetype: 238576771
+topology: 2064870995
+spatial: 2091214199
+terrain: 661731090
+world_entities: 1947510623
+pois: 789851001
+rolling_stock: 1781333302
+gameplay_problem: 1381368502
+decay: 855139671
+decoration: 250620168
+```
+
+Canonical generation trace hash:
+
+```text
+c29825cacac716621dacb2a8cf7a5450eddb7645fbe49382d304df05bcb117a6
+```
+
+## Automated Acceptance
+- [x] Same complete generation input produces the same subseeds and trace hash.
+- [x] Different `sector_index` changes stream subseeds.
+- [x] Different `run_seed` changes stream subseeds.
+- [x] Different `generator_version` changes stream subseeds and trace identity.
+- [x] Consuming `decoration` does not perturb `topology`.
+- [x] Creating/consuming `terrain` before `topology` does not perturb `topology`.
+- [x] Recreating a named stream returns a defined reset deterministic sequence.
+- [x] Unknown stream names fail with structured diagnostics.
+- [x] Range semantics are covered by tests.
+- [x] No procedural topology, spatial generation or runtime integration is introduced.
 
 ## Explicit Exclusions
-Do not implement in Sprint 9E:
-- procedural generation;
-- RNG streams;
-- archetype selection;
-- weighted topology choices;
-- automatic spatial solving;
-- terrain, roads, rivers, towns or POIs as generated geometry;
-- bridge/tunnel generation;
-- rolling-stock procedural placement;
+Do not implement in Sprint 9F:
+- procedural archetype selection;
+- procedural railway topology;
+- weighted loops, yards or spurs;
+- random track graphs;
+- procedural spatial embeddings;
+- terrain, roads, rivers, towns or POIs;
+- rolling-stock placement;
 - damage/gameplay mutations;
-- repair/recommissioning abandoned railway;
-- shunting-solvability search;
-- train-length/headshunt clearance solving;
-- seed sweeps;
-- active `SectorLifecycle` replacement;
+- shunting solvability;
+- generated railway seed sweeps;
+- production `SectorDefinition` integration;
+- active `SectorLifecycle` integration;
 - save/load changes;
-- art polish.
+- route-map gameplay;
+- art changes.
+
+## Developer Acceptance
+No gameplay UAT is required for 9F. Developer acceptance is the golden generation trace plus automated proof that decoration/terrain stream consumption does not alter topology.
 
 ## Next Possible Increment
-Future work may start deterministic semantic generation or procedural spatial embedding only after an explicit sprint plan. 9E remains authored breadth proof, not generation.
+Future work may build semantic generation on top of `WorldgenGenerationContext`, but only after an explicit sprint plan promotes procedural archetype/topology work.
