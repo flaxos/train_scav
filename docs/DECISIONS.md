@@ -113,3 +113,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-028 — Sprint 9B proves blueprint coverage before generation
 **Decision:** Sprint 9B uses six authored reference archetype fixtures to prove one immutable `SectorBlueprint` query API and canonical hash contract before implementing seeded semantic generation. `SectorDefinition` and the active sector lifecycle remain on the existing authored path.
 **Reason:** The 9A schema first needs to show it can represent materially different researched railway places without archetype-specific runtime code. Deferring RNG streams, procedural topology and runtime loading keeps 9B from jumping ahead into later procgen and preserves the playable prototype.
+
+## D-029 — Sprint 9C validates semantic topology before geometry
+**Decision:** Sprint 9C strengthens `WorldgenSchemaValidator` with structured diagnostics for semantic railway topology and world-relationship errors while remaining independent of scene nodes, `RailMovement`, `SectorLifecycle`, POIs and rolling-stock simulation.
+**Reason:** Future authored and generated blueprints need actionable rejection reasons before geometry or runtime reconstruction exists. Keeping validation semantic-only catches bad graph meaning early without expanding into generator, shunting solvability or physical railway authority scope.

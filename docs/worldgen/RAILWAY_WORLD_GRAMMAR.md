@@ -78,3 +78,16 @@ Sprint 9B uses authored semantic fixtures to prove the schema covers multiple ma
 These are not procedural outputs and do not contain physical rail geometry. They are canonical JSON reference data for testing the shared semantic contract.
 
 Sprint 9A does not generate sectors. Sprint 9B also does not generate sectors; it proves authored semantic coverage before deterministic generation, geometry embedding and gameplay placement are attempted.
+
+## Sprint 9C Semantic Validation
+Sprint 9C rejects source-neutral semantic graphs that are operationally nonsensical before physical geometry exists.
+
+Conservative 9C rules:
+- active entry and exit must be connected through usable non-abandoned railway edges;
+- `PASSING_LOOP` edges must be double-ended and reconnect to usable railway network at both ends;
+- active dead-end tracks must terminate at meaningful terminal semantics such as `BUFFER_STOP`;
+- yard and spur roles must connect to usable railway network;
+- industry/agricultural spur service must be supported by existing `FREIGHT_FACILITY_ON_TRACK` relationships;
+- bridge relations must correspond to an existing water-crossing relation on the same rail edge.
+
+`ABANDONED_TRACK` remains valid semantic evidence for declining/disused archetypes, but it does not satisfy active movement or active-service validation.

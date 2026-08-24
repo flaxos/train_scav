@@ -181,9 +181,9 @@ Only after the vertical slice is fun, Phase C should deepen the systems that mak
 | Sprint | Focus | Why now |
 | --- | --- | --- |
 | 9A | Railway grammar research & schema | Converts deep research into source-neutral, versioned docs, JSON schema, fixtures and validation before implementation. |
-| 9B | Deterministic semantic railway generation | Produces seed-derived railway/world meaning while staying independent of physical geometry. |
-| 9C | Semantic graph to physical sector geometry | Embeds valid semantic graphs into playable track/world layouts. |
-| 9D | Procedural world gameplay integration | Connects generated POIs, rolling stock, problems and route decisions to existing systems. |
+| 9B | Semantic blueprint archetype coverage | Proves six researched authored archetypes share one immutable blueprint API before generation. |
+| 9C | Semantic railway topology validation | Rejects nonsensical semantic graphs with diagnostics before geometry or runtime railway objects exist. |
+| 9D | Deterministic semantic railway generation | Produces seed-derived railway/world meaning while staying independent of physical geometry. |
 | 10 | Rolling-stock ecosystem | Gives generated yards meaningful things to contain and recover. |
 | 11 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock variety exists. |
 | 12 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
@@ -200,6 +200,12 @@ Sprint 9 is split into gated increments so procedural variety does not rewrite v
 
 9A acceptance:
 > The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
+
+9B acceptance:
+> Six authored researched railway archetypes parse, validate, construct immutable `SectorBlueprint` objects, expose the same semantic query API, hash stably, remain materially different graphs and leave the existing playable sector lifecycle unchanged.
+
+9C acceptance:
+> Semantic blueprints with nonsensical railway topology or world relationships are rejected with useful diagnostic codes and IDs while all six Sprint 9B authored archetypes still validate and the active playable sector lifecycle remains unchanged.
 
 9D acceptance:
 > Fixed generated-sector seeds produce deterministic, visibly different and solvable travel -> stop -> explore -> shunt -> depart opportunities while preserving Sprint 1-8 regression behavior.
