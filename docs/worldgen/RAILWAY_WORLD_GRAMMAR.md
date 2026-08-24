@@ -116,3 +116,30 @@ The embedding layer remains separate from semantic meaning:
 Route presets are development-harness convenience metadata only. They apply ordinary turnout settings and do not create a second routing system.
 
 Declining/disused railway is represented by mapping `ABANDONED_TRACK` edges to display-only runtime segments. These segments are visible and retain semantic IDs, but they are excluded from active movement connections and cannot satisfy active routing.
+
+## Sprint 9G Generated Village Passing Station
+Sprint 9G generates one restrained semantic archetype: `village_passing_station`.
+
+The generated railway grammar is:
+
+```text
+ENTRY
+  -> approach main
+  -> west loop switch
+  -> station main or passing loop
+  -> east loop switch
+  -> exit main
+  -> EXIT
+```
+
+The semantic graph always contains:
+- one active entry-to-exit route;
+- one double-ended `PASSING_LOOP`;
+- station, platform and settlement entities;
+- a `PLATFORM_SERVES_TRACK` relation targeting a usable active station track.
+
+Allowed 9G variation is deliberately small:
+- `topology` may choose whether the platform serves the station main or passing loop;
+- `world_entities` may choose whether simple road access is present.
+
+9G does not generate loop side, station side, physical road geometry, coordinates, goods yards, agricultural loading, river crossings or abandoned branches.

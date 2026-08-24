@@ -28,7 +28,9 @@ Sprint 9 should progress through gated increments:
   ↓
 9F: deterministic generation request/context/RNG trace infrastructure only
   ↓
-9G+: semantic generation, broader procedural embedding, POIs, rolling stock, problems, solvability and UAT
+9G: one-archetype procedural semantic topology only
+  ↓
+9H+: procedural embedding, broader archetypes, POIs, rolling stock, problems, solvability and UAT
 ```
 
 Sprint numbering after 9C may be revised by an explicit sprint plan, but 9C itself is only semantic validation.
@@ -164,6 +166,33 @@ The project-owned worldgen stream is a Park-Miller LCG using multiplier `48271` 
 - `range_int(min, max)` is inclusive of both integer bounds;
 - `range_float(min, max)` returns `[min, max)`.
 
+## Sprint 9G Boundary
+9G adds the first procedural semantic topology generator:
+
+```text
+WorldgenGenerationRequest
+  -> WorldgenGenerationContext
+  -> WorldgenSemanticGenerator
+  -> SectorBlueprint
+  -> WorldgenSchemaValidator
+```
+
+It generates only `village_passing_station` semantic data. The generator does not read authored fixture files, produce physical coordinates, call the runtime reconstructor, touch `RailMovement`, or integrate with `SectorDefinition`/`SectorLifecycle`.
+
+The generation algorithm identity is:
+
+```text
+9g_village_passing_station_semantic_v1
+```
+
+Requests with any other `generator_version` are rejected with `GENERATOR_VERSION_MISMATCH`. The generated blueprint dictionary still keeps `generator_version: 9a_schema_v1` because that field is the existing semantic schema compatibility contract checked by `WorldgenSchemaValidator`.
+
+9G stream ownership is intentionally small:
+- `topology` chooses rail-semantic variation such as which valid station track the platform serves;
+- `world_entities` chooses world-relationship variation such as optional road access.
+
+No spatial side/orientation decisions are recorded in 9G because no spatial embedding exists yet. 9G appends its stage decisions to any existing trace decisions from the context.
+
 ## Future Pipeline Shape
 When generation is explicitly promoted into a later sprint, the likely long-term sector creation shape is:
 
@@ -258,6 +287,20 @@ Do not implement these in 9F:
 - save/load changes;
 - route-map gameplay;
 - art changes.
+
+## Deferred From 9G
+Do not implement these in 9G:
+- procedural spatial embeddings;
+- random coordinates or geometry;
+- `RailMovement` or runtime reconstruction of generated sectors;
+- production `SectorDefinition` or `SectorLifecycle` integration;
+- procedural goods yards, industrial spurs, agricultural loading, river valleys or abandoned branches;
+- terrain, generated rivers, roads, bridges, towns or POIs;
+- rolling-stock placement;
+- decay/damage mutations;
+- gameplay problems;
+- shunting-solvability search;
+- save/load changes.
 
 ## Validation Direction
 9B validation is intentionally cheap:
