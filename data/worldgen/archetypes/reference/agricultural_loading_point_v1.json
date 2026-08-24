@@ -1,0 +1,91 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetype_id": "agricultural_loading_point",
+  "title": "Agricultural Loading Point",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "spur_switch", "type": "SWITCH" },
+      { "id": "loading_switch", "type": "SWITCH" },
+      { "id": "east_exit", "type": "EXIT" },
+      { "id": "grain_buffer", "type": "BUFFER_STOP" },
+      { "id": "runaround_buffer", "type": "BUFFER_STOP" }
+    ],
+    "edges": [
+      {
+        "id": "main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "spur_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "main_east",
+        "role": "THROUGH_MAIN",
+        "from": "spur_switch",
+        "to": "east_exit",
+        "bidirectional": true
+      },
+      {
+        "id": "agricultural_spur",
+        "role": "AGRICULTURAL_SPUR",
+        "from": "spur_switch",
+        "to": "loading_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "grain_loading",
+        "role": "LOADING_TRACK",
+        "from": "loading_switch",
+        "to": "grain_buffer",
+        "bidirectional": true
+      },
+      {
+        "id": "short_runaround",
+        "role": "HEADSHUNT",
+        "from": "loading_switch",
+        "to": "runaround_buffer",
+        "bidirectional": true
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "loading_stop", "type": "STATION" },
+      { "id": "farm_road", "type": "ROAD" },
+      { "id": "grain_store", "type": "AGRICULTURAL_FACILITY" },
+      { "id": "farm_coop", "type": "AGRICULTURAL_FACILITY" },
+      { "id": "field_settlement", "type": "SETTLEMENT" }
+    ],
+    "relations": [
+      {
+        "id": "stop_serves_fields",
+        "type": "SERVES_SETTLEMENT",
+        "from_entity": "loading_stop",
+        "to_entity": "field_settlement"
+      },
+      {
+        "id": "grain_store_on_loading",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "grain_store",
+        "to_edge": "grain_loading"
+      },
+      {
+        "id": "coop_on_spur",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "farm_coop",
+        "to_edge": "agricultural_spur"
+      },
+      {
+        "id": "road_serves_grain",
+        "type": "ROAD_ACCESS",
+        "from_entity": "farm_road",
+        "to_entity": "grain_store"
+      }
+    ]
+  }
+}

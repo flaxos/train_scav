@@ -1,0 +1,39 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetype_id": "rural_through",
+  "title": "Rural Through",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "east_exit", "type": "EXIT" }
+    ],
+    "edges": [
+      {
+        "id": "rural_main",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "east_exit",
+        "bidirectional": true,
+        "abstract_hint": "long_single_track"
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "wayside_stop", "type": "STATION" },
+      { "id": "field_road", "type": "ROAD" }
+    ],
+    "relations": [
+      {
+        "id": "wayside_stop_on_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "wayside_stop",
+        "to_edge": "rural_main"
+      }
+    ]
+  }
+}

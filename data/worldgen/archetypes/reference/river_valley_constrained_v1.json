@@ -1,0 +1,95 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetype_id": "river_valley_constrained",
+  "title": "River-Valley Constrained",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "west_loop_switch", "type": "SWITCH" },
+      { "id": "east_loop_switch", "type": "SWITCH" },
+      { "id": "bridge_joint", "type": "JOINT" },
+      { "id": "east_exit", "type": "EXIT" }
+    ],
+    "edges": [
+      {
+        "id": "valley_main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "west_loop_switch",
+        "bidirectional": true,
+        "abstract_hint": "cutting"
+      },
+      {
+        "id": "valley_platform_main",
+        "role": "PLATFORM_TRACK",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true,
+        "abstract_hint": "short_platform"
+      },
+      {
+        "id": "short_passing_loop",
+        "role": "PASSING_LOOP",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true,
+        "abstract_hint": "space_constrained"
+      },
+      {
+        "id": "creek_bridge_main",
+        "role": "THROUGH_MAIN",
+        "from": "east_loop_switch",
+        "to": "bridge_joint",
+        "bidirectional": true,
+        "abstract_hint": "bridge"
+      },
+      {
+        "id": "valley_main_east",
+        "role": "THROUGH_MAIN",
+        "from": "bridge_joint",
+        "to": "east_exit",
+        "bidirectional": true,
+        "abstract_hint": "embankment"
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "valley_station", "type": "STATION" },
+      { "id": "valley_platform", "type": "PLATFORM" },
+      { "id": "mill_creek", "type": "CREEK" },
+      { "id": "rail_bridge", "type": "BRIDGE" },
+      { "id": "valley_road", "type": "ROAD" }
+    ],
+    "relations": [
+      {
+        "id": "platform_on_valley_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "valley_platform",
+        "to_edge": "valley_platform_main"
+      },
+      {
+        "id": "creek_crossed_by_main",
+        "type": "WATER_CROSSED_BY_TRACK",
+        "from_entity": "mill_creek",
+        "to_edge": "creek_bridge_main"
+      },
+      {
+        "id": "bridge_carries_main",
+        "type": "BRIDGE_CARRIES_TRACK",
+        "from_entity": "rail_bridge",
+        "to_edge": "creek_bridge_main"
+      },
+      {
+        "id": "road_constrained_by_valley",
+        "type": "ROAD_ACCESS",
+        "from_entity": "valley_road",
+        "to_entity": "valley_station"
+      }
+    ]
+  }
+}

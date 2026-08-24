@@ -63,4 +63,18 @@ Every future grammar rule should carry one label:
 ## Runtime Rule
 JSON is canonical for runtime and automated validation. YAML is permitted only as a human-readable reference copy.
 
-Sprint 9A does not generate sectors. It defines the semantic contracts that Sprint 9B-9D must obey.
+## Sprint 9B Reference Archetypes
+Sprint 9B uses authored semantic fixtures to prove the schema covers multiple materially different railway places through one immutable blueprint API:
+
+| Archetype | Purpose |
+| --- | --- |
+| `rural_through` | Low-complexity countryside baseline with an entry, through main and exit. |
+| `village_passing_station` | Small passenger stop with a double-ended passing loop and platform. |
+| `small_town_goods_station` | Compact station with loop, goods yard, loading track and local industry. |
+| `agricultural_loading_point` | Branch-line loading place where an agricultural spur serves a loading facility. |
+| `river_valley_constrained` | Constrained station where railway and water relationships require a bridge/crossing relation. |
+| `declining_abandoned_branch` | Freight-era decline fixture with storage/abandoned track semantics. |
+
+These are not procedural outputs and do not contain physical rail geometry. They are canonical JSON reference data for testing the shared semantic contract.
+
+Sprint 9A does not generate sectors. Sprint 9B also does not generate sectors; it proves authored semantic coverage before deterministic generation, geometry embedding and gameplay placement are attempted.

@@ -1,0 +1,114 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetype_id": "declining_abandoned_branch",
+  "title": "Declining/Abandoned Branch",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "west_loop_switch", "type": "SWITCH" },
+      { "id": "east_loop_switch", "type": "SWITCH" },
+      { "id": "old_yard_switch", "type": "SWITCH" },
+      { "id": "east_exit", "type": "EXIT" },
+      { "id": "old_goods_buffer", "type": "BUFFER_STOP" },
+      { "id": "overgrown_buffer", "type": "BUFFER_STOP" },
+      { "id": "removed_track_stub", "type": "JOINT" }
+    ],
+    "edges": [
+      {
+        "id": "main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "west_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "worn_platform_main",
+        "role": "PLATFORM_TRACK",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "rusty_passing_loop",
+        "role": "PASSING_LOOP",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "main_east",
+        "role": "THROUGH_MAIN",
+        "from": "east_loop_switch",
+        "to": "east_exit",
+        "bidirectional": true
+      },
+      {
+        "id": "old_goods_lead",
+        "role": "GOODS_YARD_TRACK",
+        "from": "west_loop_switch",
+        "to": "old_yard_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "abandoned_loading_track",
+        "role": "ABANDONED_TRACK",
+        "from": "old_yard_switch",
+        "to": "old_goods_buffer",
+        "bidirectional": true
+      },
+      {
+        "id": "overgrown_storage",
+        "role": "STORAGE_TRACK",
+        "from": "old_yard_switch",
+        "to": "overgrown_buffer",
+        "bidirectional": true
+      },
+      {
+        "id": "removed_branch_stub",
+        "role": "ABANDONED_TRACK",
+        "from": "old_yard_switch",
+        "to": "removed_track_stub",
+        "bidirectional": true
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "branch_station", "type": "STATION" },
+      { "id": "branch_platform", "type": "PLATFORM" },
+      { "id": "old_goods_yard", "type": "GOODS_YARD" },
+      { "id": "closed_factory", "type": "INDUSTRY" },
+      { "id": "branch_town", "type": "SETTLEMENT" }
+    ],
+    "relations": [
+      {
+        "id": "station_serves_branch_town",
+        "type": "SERVES_SETTLEMENT",
+        "from_entity": "branch_station",
+        "to_entity": "branch_town"
+      },
+      {
+        "id": "platform_on_worn_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "branch_platform",
+        "to_edge": "worn_platform_main"
+      },
+      {
+        "id": "old_yard_on_lead",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "old_goods_yard",
+        "to_edge": "old_goods_lead"
+      },
+      {
+        "id": "closed_factory_on_abandoned_track",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "closed_factory",
+        "to_edge": "abandoned_loading_track"
+      }
+    ]
+  }
+}

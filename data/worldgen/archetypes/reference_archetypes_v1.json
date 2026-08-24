@@ -1,0 +1,36 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetypes": [
+    {
+      "archetype_id": "rural_through",
+      "label": "Rural Through",
+      "path": "res://data/worldgen/archetypes/reference/rural_through_v1.json"
+    },
+    {
+      "archetype_id": "village_passing_station",
+      "label": "Village Passing Station",
+      "path": "res://data/worldgen/archetypes/reference/village_passing_station_v1.json"
+    },
+    {
+      "archetype_id": "small_town_goods_station",
+      "label": "Small-Town Goods Station",
+      "path": "res://data/worldgen/archetypes/reference/small_town_goods_station_v1.json"
+    },
+    {
+      "archetype_id": "agricultural_loading_point",
+      "label": "Agricultural Loading Point",
+      "path": "res://data/worldgen/archetypes/reference/agricultural_loading_point_v1.json"
+    },
+    {
+      "archetype_id": "river_valley_constrained",
+      "label": "River-Valley Constrained",
+      "path": "res://data/worldgen/archetypes/reference/river_valley_constrained_v1.json"
+    },
+    {
+      "archetype_id": "declining_abandoned_branch",
+      "label": "Declining/Abandoned Branch",
+      "path": "res://data/worldgen/archetypes/reference/declining_abandoned_branch_v1.json"
+    }
+  ]
+}

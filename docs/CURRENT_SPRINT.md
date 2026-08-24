@@ -1,85 +1,111 @@
-# Current Sprint — Sprint 9A: Railway Grammar Research & Schema
+# Current Sprint - Sprint 9B: Semantic Blueprint Archetype Coverage
 
-**Status:** IMPLEMENTED — AUTOMATED VALIDATION READY
+**Status:** IMPLEMENTED - AUTOMATED VALIDATION READY
 
 ## Hypothesis
-A research-derived semantic railway/world grammar can describe procedural sector meaning before geometry, while preserving the physical train, crew, scavenging and sector lifecycle systems validated through Sprint 8.
+One common immutable semantic blueprint model can accurately represent all six researched railway archetypes without archetype-specific runtime code.
 
-Sprint 9A proves the description layer only:
+Sprint 9B proves representation coverage only:
 
-RESEARCH REPORTS -> SOURCE-NEUTRAL ONTOLOGY -> VERSIONED JSON SCHEMA -> CANONICAL FIXTURES -> VALIDATOR -> TEST SEED CONTRACT
+```text
+SPRINT 9A SCHEMA
+  -> AUTHORED REFERENCE FIXTURES
+  -> NORMALISED LOAD
+  -> IMMUTABLE SectorBlueprint
+  -> CANONICAL HASH / QUERY API TESTS
+```
 
 Roadmap acceptance:
-> The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
+> All six authored reference archetypes parse, validate, construct `SectorBlueprint`, expose correct semantic queries, produce stable canonical hashes, remain materially different graphs, and do not alter the existing playable game or sector lifecycle.
 
 ## Baseline Dependencies
-Sprint 9A builds on the completed Sprint 1-8 systems and docs:
-- rail-space movement, points, coupling, uncoupling and contact;
-- crew tasks as orchestration over rail authority;
-- sector lifecycle with irreversible forward disposal;
-- POI/search/haul/deposit ownership semantics;
-- Sprint 8 vertical-slice scenario composition;
-- `docs/deep-research-report-grammer.md` and `docs/deep-research-report-prompts.md` as raw research inputs.
+Sprint 9B builds directly on the accepted Sprint 9A semantic contract and research inputs:
+- `docs/deep-research-report-grammer.md` and `docs/deep-research-report-prompts.md`;
+- source-neutral rail graph roles and world relationship graph vocabulary;
+- the 9A JSON fixtures and validator;
+- completed Sprint 1-8 rail, crew, scavenging, sector lifecycle and vertical-slice systems.
 
-Do not replace `RailMovement`, `SectorInstance`, `SectorPOIs`, coupling, sector lifecycle or the vertical-slice scenario in 9A.
+Do not replace `RailMovement`, `SectorDefinition`, `SectorInstance`, `SectorPOIs`, coupling, crew tasks, sector lifecycle or the vertical-slice scenario in 9B.
 
 ## In Scope
-The active build should add the smallest durable foundation for later procedural railway sectors:
-1. Curated worldgen docs under `docs/worldgen/` summarising the research-backed grammar and governance rules.
-2. A source-neutral semantic rail graph model with nodes, track edges and internal roles such as `THROUGH_MAIN`, `PASSING_LOOP`, `GOODS_YARD_TRACK`, `LOADING_TRACK`, `HEADSHUNT` and `AGRICULTURAL_SPUR`.
-3. A separate world relationship graph for station, road, creek, bridge, industry, goods shed, POI and settlement meaning.
-4. Canonical runtime JSON fixtures under `data/worldgen/`.
-5. A human-readable YAML archetype copy for authoring/reference only.
-6. A deterministic test-seed contract for later 9B-9D increments.
-7. A focused validator and tests proving valid fixtures pass and malformed fixtures fail predictably.
+The active build adds the smallest proof that the 9A schema is broad enough for materially different railway places:
+1. `SectorBlueprint` as an immutable query wrapper over authored semantic data.
+2. Canonical deterministic serialization and SHA-256 hash generation for authored semantic dictionaries.
+3. A small fixture loader for canonical JSON reference archetypes.
+4. Six authored reference archetype fixtures under `data/worldgen/archetypes/reference/`.
+5. A fixture registry under `data/worldgen/archetypes/reference_archetypes_v1.json`.
+6. Tests proving all six fixtures parse, validate, construct blueprints, share one schema/API, hash stably and remain materially different.
+7. Defensive-copy tests for blueprint queries and dictionary export.
+8. Documentation and decision updates recording the narrowed 9B boundary.
+
+Required `SectorBlueprint` semantic API:
+- `get_tracks_by_role()`
+- `get_nodes_by_type()`
+- `get_entities_by_type()`
+- `get_station()`
+- `get_goods_yards()`
+- `get_industries()`
+- `get_water_crossings()`
+- `has_rail_path()`
+- `get_canonical_hash()`
+- `to_dictionary()`
+
+## Reference Archetypes
+The six Sprint 9B fixtures are authored semantic data, not generated sectors:
+1. Rural through.
+2. Village passing station.
+3. Small-town goods station.
+4. Agricultural loading point.
+5. River-valley constrained.
+6. Declining/abandoned branch.
+
+Each fixture must use the same 9A schema and the same `SectorBlueprint` query API. Differences belong in authored graph data, not archetype-specific runtime branches.
 
 ## Authority Rules
-- **Research docs own** provenance, terminology mapping and corpus method.
-- **Worldgen schema owns** initial semantic description of generated sector meaning.
-- **Runtime rail owns** physical movement, topology, rolling stock, consist order, contact, coupling, uncoupling and powered control.
-- **Sector lifecycle owns** irreversible departure and disposable sector runtime state.
-- **Generated blueprints later may author initial state** but must not become live gameplay authority after sector instantiation.
-
-Critical invariants:
-- internal runtime fixtures must use source-neutral roles, not raw OSM/ORM tags such as `service=siding`;
-- station, road, creek, bridge, goods shed and industry are world entities/relations, not railway-routing vertices;
-- JSON is canonical at runtime; YAML is reference/authoring only;
-- no real station geometry is copied into shipped fixtures;
-- design priors, observed facts, inferred relationships and gameplay abstractions must remain distinguishable.
+- `SectorBlueprint` is a read-only semantic description artifact. It is not live railway authority.
+- The active game remains on the existing authored `SectorDefinition` path.
+- `SectorDefinition` must not automatically generate or attach a blueprint in 9B.
+- The 9A validator may receive only small compatibility fixes needed for these fixtures.
+- Runtime fixtures must use source-neutral semantic roles, not raw OSM/OpenRailwayMap tags.
+- No physical `Vector2` track geometry, rolling stock, POI placement, terrain, routes or gameplay problems are authored through 9B blueprints.
 
 ## Explicit Exclusions
-Do NOT implement in Sprint 9A:
-- procedural sector generation;
-- semantic graph randomisation;
-- rail geometry embedding;
-- generated POI or rolling-stock placement;
-- shunting solvability search;
-- runtime `RailMovement` data loading;
-- changes to coupling, point physics, crew tasks or sector lifecycle;
-- YAML parsing dependency at runtime;
-- OSM/ORM data import pipeline;
-- signalling/interlocking, timetable simulation, combat, factions, trading, weather, save/load or final art.
+Do NOT implement in Sprint 9B:
+- `WorldgenRngStreams`;
+- `WorldgenSemanticGenerator`;
+- procedural archetype selection;
+- weighted feature generation;
+- procedural topology construction;
+- generation retries or fallbacks;
+- 500-seed or large seed sweeps;
+- gameplay/problem generation;
+- geometry or terrain generation;
+- runtime `RailMovement` reconstruction from blueprints;
+- rolling-stock instantiation;
+- POI spawning;
+- integration into the active `SectorLifecycle`;
+- replacement of `SectorDefinition`'s existing authored generation path;
+- 9C work.
 
 ## Automated Acceptance
-- [x] Research reports are present as raw inputs.
-- [x] Curated worldgen docs identify the semantic-first approach and provenance rules.
-- [x] Runtime JSON schema/archetype files are versioned.
-- [x] Human-readable YAML reference archetype exists but is not required by runtime validation.
-- [x] Canonical fixtures use source-neutral railway roles instead of raw external map tags.
-- [x] Validator accepts the valid central European small-town station fixture.
-- [x] Validator rejects a missing-entry fixture with an entry-specific error.
-- [x] Validator rejects a bad-reference fixture naming the unknown node.
-- [x] Test-seed contract records fixed future acceptance seeds.
+- [x] Six authored reference fixtures are registered.
+- [x] All six fixtures parse from canonical JSON.
+- [x] All six fixtures validate through the 9A semantic validator.
+- [x] All six fixtures construct `SectorBlueprint`.
+- [x] All six fixtures expose semantic queries through the same API.
+- [x] All six fixtures produce stable canonical hashes across repeated loads.
+- [x] All six fixtures have distinct canonical hashes.
+- [x] All six fixtures have materially different graph signatures.
+- [x] Blueprint query/export methods return defensive copies.
+- [x] Existing Sprint 9A schema validation remains green.
 - [x] Existing Sprint 1-8 regression tests remain green.
 - [x] Headless launch has no parse/compile/runtime script errors.
 
 ## Human Review Gate
-Sprint 9A has no playable procedural-sector UAT. It is complete when the user accepts that the schema, fixtures, docs and validator are the right foundation for Sprint 9B.
+Sprint 9B has no playable procedural-sector UAT. It is complete when the user accepts that one common immutable blueprint API can represent the six researched archetypes without changing the active game.
 
 ## Definition of Done
-Sprint 9A is complete only after the 9A automated test passes, the existing regression suite remains green, and the user accepts the schema/docs direction.
+Sprint 9B is complete only after the focused 9B tests pass, the broader regression suite remains green, headless launch succeeds, and no runtime sector lifecycle or railway authority path has been replaced.
 
 ## Next Possible Increment
-Sprint 9B — Deterministic Semantic Railway Generation.
-
-Do not begin 9B until 9A is accepted. 9B may generate semantic graphs from seeds but still must not embed physical rail geometry or replace live railway authority.
+Deterministic semantic generation from seeds remains deferred. Do not begin it, 9C geometry work, runtime loading, POI spawning or rolling-stock placement without an explicit new sprint plan.

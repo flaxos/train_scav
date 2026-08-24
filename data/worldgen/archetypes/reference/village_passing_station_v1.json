@@ -1,0 +1,75 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_set": "sprint9b_reference_archetypes_v1",
+  "archetype_id": "village_passing_station",
+  "title": "Village Passing Station",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "west_loop_switch", "type": "SWITCH" },
+      { "id": "east_loop_switch", "type": "SWITCH" },
+      { "id": "east_exit", "type": "EXIT" }
+    ],
+    "edges": [
+      {
+        "id": "main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "west_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "platform_main",
+        "role": "PLATFORM_TRACK",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "passing_loop",
+        "role": "PASSING_LOOP",
+        "from": "west_loop_switch",
+        "to": "east_loop_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "main_east",
+        "role": "THROUGH_MAIN",
+        "from": "east_loop_switch",
+        "to": "east_exit",
+        "bidirectional": true
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "village_station", "type": "STATION" },
+      { "id": "village_platform", "type": "PLATFORM" },
+      { "id": "village", "type": "SETTLEMENT" },
+      { "id": "station_road", "type": "ROAD" }
+    ],
+    "relations": [
+      {
+        "id": "station_serves_village",
+        "type": "SERVES_SETTLEMENT",
+        "from_entity": "village_station",
+        "to_entity": "village"
+      },
+      {
+        "id": "platform_on_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "village_platform",
+        "to_edge": "platform_main"
+      },
+      {
+        "id": "road_access_station",
+        "type": "ROAD_ACCESS",
+        "from_entity": "station_road",
+        "to_entity": "village_station"
+      }
+    ]
+  }
+}

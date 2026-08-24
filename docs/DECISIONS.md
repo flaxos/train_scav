@@ -109,3 +109,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-027 — Procedural railway generation starts with semantic graphs
 **Decision:** Sprint 9 worldgen represents railway meaning as a source-neutral semantic rail graph plus a separate world relationship graph before any physical geometry or gameplay placement is generated. Runtime fixtures use canonical JSON and internal roles such as `THROUGH_MAIN`, `PASSING_LOOP`, `GOODS_YARD_TRACK` and `AGRICULTURAL_SPUR`; raw external map tags remain research provenance only.
 **Reason:** Procedural sectors need railway places the game can reason about without copying real station geometry, depending on OSM/ORM tags at runtime, or replacing the validated `RailMovement`, crew, POI and sector-lifecycle authorities.
+
+## D-028 — Sprint 9B proves blueprint coverage before generation
+**Decision:** Sprint 9B uses six authored reference archetype fixtures to prove one immutable `SectorBlueprint` query API and canonical hash contract before implementing seeded semantic generation. `SectorDefinition` and the active sector lifecycle remain on the existing authored path.
+**Reason:** The 9A schema first needs to show it can represent materially different researched railway places without archetype-specific runtime code. Deferring RNG streams, procedural topology and runtime loading keeps 9B from jumping ahead into later procgen and preserves the playable prototype.
