@@ -1,0 +1,111 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_id": "valid_central_eu_small_town_v1",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "west_switch", "type": "SWITCH" },
+      { "id": "east_switch", "type": "SWITCH" },
+      { "id": "yard_switch", "type": "SWITCH" },
+      { "id": "east_exit", "type": "EXIT" },
+      { "id": "goods_buffer", "type": "BUFFER_STOP" },
+      { "id": "headshunt_buffer", "type": "BUFFER_STOP" }
+    ],
+    "edges": [
+      {
+        "id": "main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "west_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "platform_main",
+        "role": "PLATFORM_TRACK",
+        "from": "west_switch",
+        "to": "east_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "passing_loop",
+        "role": "PASSING_LOOP",
+        "from": "west_switch",
+        "to": "east_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "main_east",
+        "role": "THROUGH_MAIN",
+        "from": "east_switch",
+        "to": "east_exit",
+        "bidirectional": true
+      },
+      {
+        "id": "yard_lead",
+        "role": "GOODS_YARD_TRACK",
+        "from": "west_switch",
+        "to": "yard_switch",
+        "bidirectional": true
+      },
+      {
+        "id": "goods_loading",
+        "role": "LOADING_TRACK",
+        "from": "yard_switch",
+        "to": "goods_buffer",
+        "bidirectional": true
+      },
+      {
+        "id": "headshunt",
+        "role": "HEADSHUNT",
+        "from": "yard_switch",
+        "to": "headshunt_buffer",
+        "bidirectional": true
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "town", "type": "SETTLEMENT" },
+      { "id": "station", "type": "STATION" },
+      { "id": "platform", "type": "PLATFORM" },
+      { "id": "goods_shed", "type": "GOODS_SHED" },
+      { "id": "creek", "type": "CREEK" },
+      { "id": "bridge", "type": "BRIDGE" }
+    ],
+    "relations": [
+      {
+        "id": "station_serves_town",
+        "type": "SERVES_SETTLEMENT",
+        "from_entity": "station",
+        "to_entity": "town"
+      },
+      {
+        "id": "platform_adjacent_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "platform",
+        "to_edge": "platform_main"
+      },
+      {
+        "id": "goods_shed_on_loading",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "goods_shed",
+        "to_edge": "goods_loading"
+      },
+      {
+        "id": "creek_crossing",
+        "type": "WATER_CROSSED_BY_TRACK",
+        "from_entity": "creek",
+        "to_edge": "main_east"
+      },
+      {
+        "id": "bridge_carries_main",
+        "type": "BRIDGE_CARRIES_TRACK",
+        "from_entity": "bridge",
+        "to_edge": "main_east"
+      }
+    ]
+  }
+}

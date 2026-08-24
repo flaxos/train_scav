@@ -1,0 +1,158 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "title": "Central European Small-Town Station Reference Archetype",
+  "research_status": "design_prior_from_deep_research",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "west_switch", "type": "SWITCH" },
+      { "id": "east_switch", "type": "SWITCH" },
+      { "id": "yard_switch", "type": "SWITCH" },
+      { "id": "agri_switch", "type": "SWITCH" },
+      { "id": "east_exit", "type": "EXIT" },
+      { "id": "goods_buffer", "type": "BUFFER_STOP" },
+      { "id": "headshunt_buffer", "type": "BUFFER_STOP" },
+      { "id": "agri_buffer", "type": "BUFFER_STOP" }
+    ],
+    "edges": [
+      {
+        "id": "main_west",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "west_switch",
+        "bidirectional": true,
+        "evidence_label": "observed"
+      },
+      {
+        "id": "platform_main",
+        "role": "PLATFORM_TRACK",
+        "from": "west_switch",
+        "to": "east_switch",
+        "bidirectional": true,
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "passing_loop",
+        "role": "PASSING_LOOP",
+        "from": "west_switch",
+        "to": "east_switch",
+        "bidirectional": true,
+        "evidence_label": "observed"
+      },
+      {
+        "id": "main_east",
+        "role": "THROUGH_MAIN",
+        "from": "east_switch",
+        "to": "east_exit",
+        "bidirectional": true,
+        "evidence_label": "observed"
+      },
+      {
+        "id": "yard_lead",
+        "role": "GOODS_YARD_TRACK",
+        "from": "west_switch",
+        "to": "yard_switch",
+        "bidirectional": true,
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "goods_loading",
+        "role": "LOADING_TRACK",
+        "from": "yard_switch",
+        "to": "goods_buffer",
+        "bidirectional": true,
+        "evidence_label": "inferred"
+      },
+      {
+        "id": "headshunt",
+        "role": "HEADSHUNT",
+        "from": "yard_switch",
+        "to": "headshunt_buffer",
+        "bidirectional": true,
+        "evidence_label": "gameplay_abstraction"
+      },
+      {
+        "id": "agricultural_spur",
+        "role": "AGRICULTURAL_SPUR",
+        "from": "east_switch",
+        "to": "agri_switch",
+        "bidirectional": true,
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "grain_loading",
+        "role": "LOADING_TRACK",
+        "from": "agri_switch",
+        "to": "agri_buffer",
+        "bidirectional": true,
+        "evidence_label": "inferred"
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "small_town", "type": "SETTLEMENT" },
+      { "id": "station_building", "type": "STATION" },
+      { "id": "passenger_platform", "type": "PLATFORM" },
+      { "id": "goods_shed", "type": "GOODS_SHED" },
+      { "id": "station_road", "type": "ROAD" },
+      { "id": "mill_creek", "type": "CREEK" },
+      { "id": "rail_bridge", "type": "BRIDGE" },
+      { "id": "grain_store", "type": "AGRICULTURAL_FACILITY" }
+    ],
+    "relations": [
+      {
+        "id": "station_faces_town",
+        "type": "SERVES_SETTLEMENT",
+        "from_entity": "station_building",
+        "to_entity": "small_town",
+        "evidence_label": "observed"
+      },
+      {
+        "id": "platform_serves_main",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "passenger_platform",
+        "to_edge": "platform_main",
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "road_serves_goods",
+        "type": "ROAD_ACCESS",
+        "from_entity": "station_road",
+        "to_entity": "goods_shed",
+        "evidence_label": "inferred"
+      },
+      {
+        "id": "goods_shed_serves_loading",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "goods_shed",
+        "to_edge": "goods_loading",
+        "evidence_label": "inferred"
+      },
+      {
+        "id": "creek_crossed_by_main",
+        "type": "WATER_CROSSED_BY_TRACK",
+        "from_entity": "mill_creek",
+        "to_edge": "main_east",
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "bridge_carries_main",
+        "type": "BRIDGE_CARRIES_TRACK",
+        "from_entity": "rail_bridge",
+        "to_edge": "main_east",
+        "evidence_label": "design_prior"
+      },
+      {
+        "id": "grain_store_serves_spur",
+        "type": "FREIGHT_FACILITY_ON_TRACK",
+        "from_entity": "grain_store",
+        "to_edge": "grain_loading",
+        "evidence_label": "gameplay_abstraction"
+      }
+    ]
+  }
+}

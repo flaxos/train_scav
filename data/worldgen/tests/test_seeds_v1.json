@@ -1,0 +1,22 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "seeds": [
+    {
+      "seed": 9001,
+      "purpose": "baseline small-town station with loop and compact goods yard"
+    },
+    {
+      "seed": 9042,
+      "purpose": "creek-constrained variant; future geometry validation"
+    },
+    {
+      "seed": 9127,
+      "purpose": "agricultural loading bias; future POI/resource validation"
+    },
+    {
+      "seed": 9215,
+      "purpose": "freight-legacy variant; future salvage validation"
+    }
+  ]
+}

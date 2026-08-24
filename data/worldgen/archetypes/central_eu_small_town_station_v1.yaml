@@ -1,0 +1,28 @@
+grammar_version: central_eu_small_town_station_v1
+generator_version: 9a_schema_v1
+title: Central European Small-Town Station Reference Archetype
+runtime_note: >
+  This YAML file is a human-readable authoring/reference copy only.
+  Runtime and tests consume the canonical JSON fixture.
+
+rail_roles:
+  - THROUGH_MAIN
+  - PLATFORM_TRACK
+  - PASSING_LOOP
+  - GOODS_YARD_TRACK
+  - LOADING_TRACK
+  - HEADSHUNT
+  - AGRICULTURAL_SPUR
+
+reference_composition:
+  corridor: single-track secondary or branch railway
+  station: passenger platform with double-ended passing loop
+  freight: compact goods/loading track with road-served shed
+  shunting: headshunt or equivalent clear length for simple recovery moves
+  world: settlement road, creek bridge and agricultural/loading facility
+
+governance_labels:
+  observed: directly present in corpus/source material
+  inferred: relationship inferred from multiple observations
+  design_prior: chosen before sufficient corpus frequency evidence exists
+  gameplay_abstraction: deliberate compression or departure for playability

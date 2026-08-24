@@ -1,104 +1,85 @@
-# Current Sprint — Sprint 8: First Vertical Slice
+# Current Sprint — Sprint 9A: Railway Grammar Research & Schema
 
-**Status:** AUTOMATED IMPLEMENTATION READY — HUMAN PLAYTEST PENDING
+**Status:** IMPLEMENTED — AUTOMATED VALIDATION READY
 
 ## Hypothesis
-The systems built in Sprints 1-7 become an actual game when they create one understandable chain of problems, decisions and physical consequences.
+A research-derived semantic railway/world grammar can describe procedural sector meaning before geometry, while preserving the physical train, crew, scavenging and sector lifecycle systems validated through Sprint 8.
 
-Core loop to prove:
+Sprint 9A proves the description layer only:
 
-DRIVE -> OBSTRUCTION -> STOP -> EXPEDITION -> SEARCH / RETRIEVE -> RETURN -> ONBOARD RESPONSE -> IRREVERSIBLE DEPARTURE -> INDUSTRIAL YARD -> DISCOVER WORKSHOP WAGON -> SHUNT -> PHYSICAL RECOVERY -> ACTIVATE WORKSHOP -> MAKE DECISION -> DEPART WITH UPGRADED TRAIN
+RESEARCH REPORTS -> SOURCE-NEUTRAL ONTOLOGY -> VERSIONED JSON SCHEMA -> CANONICAL FIXTURES -> VALIDATOR -> TEST SEED CONTRACT
 
 Roadmap acceptance:
-> A fresh player can complete one meaningful travel -> stop -> explore -> shunt -> upgrade -> depart cycle and understand why the train and its physical configuration matter.
+> The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
 
 ## Baseline Dependencies
-Sprint 8 builds on the completed Sprint 1-7 systems:
-- deterministic rail-space train movement, points, coupling, uncoupling and contact;
-- persistent rolling-stock identity and explicit powered-unit control;
-- crew as physical agents with aboard/yard state and task execution;
-- carriage interiors and onboard survivor movement;
-- survivor needs, roles, skills and simple task assignment;
-- sector lifecycle with irreversible departure and persistent train transfer;
-- resources, POIs, searching, physical hauling and deposit ownership.
+Sprint 9A builds on the completed Sprint 1-8 systems and docs:
+- rail-space movement, points, coupling, uncoupling and contact;
+- crew tasks as orchestration over rail authority;
+- sector lifecycle with irreversible forward disposal;
+- POI/search/haul/deposit ownership semantics;
+- Sprint 8 vertical-slice scenario composition;
+- `docs/deep-research-report-grammer.md` and `docs/deep-research-report-prompts.md` as raw research inputs.
 
-Do not replace these systems with a new mission, quest, train, crew, inventory or sector framework.
+Do not replace `RailMovement`, `SectorInstance`, `SectorPOIs`, coupling, sector lifecycle or the vertical-slice scenario in 9A.
 
-## Scenario Structure
-The active build should provide one deterministic first-session slice:
-1. Start with approximately `[L][A][B]`, crew aboard, limited train resources and no workshop wagon.
-2. Drive forward and encounter a clear obstruction/problem.
-3. Stop, send crew physically outside, search local POIs and haul useful supplies back to storage.
-4. Resolve a small onboard maintenance fault through physical crew work.
-5. Depart Sector 0 using the existing irreversible sector lifecycle.
-6. Enter an industrial railway sector containing a separate workshop wagon `W`.
-7. Use real yard operations, points, crew and shunting to physically recover `W`.
-8. Activate `W` through a short crew/work/resource step.
-9. Read the route intel and choose the next route by physically driving onto one of three marked exit branches.
-10. Depart with the upgraded train, preserving the physically coupled workshop wagon.
+## In Scope
+The active build should add the smallest durable foundation for later procedural railway sectors:
+1. Curated worldgen docs under `docs/worldgen/` summarising the research-backed grammar and governance rules.
+2. A source-neutral semantic rail graph model with nodes, track edges and internal roles such as `THROUGH_MAIN`, `PASSING_LOOP`, `GOODS_YARD_TRACK`, `LOADING_TRACK`, `HEADSHUNT` and `AGRICULTURAL_SPUR`.
+3. A separate world relationship graph for station, road, creek, bridge, industry, goods shed, POI and settlement meaning.
+4. Canonical runtime JSON fixtures under `data/worldgen/`.
+5. A human-readable YAML archetype copy for authoring/reference only.
+6. A deterministic test-seed contract for later 9B-9D increments.
+7. A focused validator and tests proving valid fixtures pass and malformed fixtures fail predictably.
 
 ## Authority Rules
-- **Rail owns** physical movement, topology, rolling stock, consist order, contact, coupling, uncoupling and powered control.
-- **Crew owns** survivor position, movement, tasks and carried cargo.
-- **Train/colony owns** deposited diesel, food, parts, survivor persistent state and carriage interiors.
-- **Sector owns** disposable POIs, obstruction/fault world context and local yard objects.
-- **Sector lifecycle owns** irreversible departure, old-sector disposal and persistent transfer.
-- **Scenario coordinator may observe and author setup** but must not become a competing gameplay authority.
+- **Research docs own** provenance, terminology mapping and corpus method.
+- **Worldgen schema owns** initial semantic description of generated sector meaning.
+- **Runtime rail owns** physical movement, topology, rolling stock, consist order, contact, coupling, uncoupling and powered control.
+- **Sector lifecycle owns** irreversible departure and disposable sector runtime state.
+- **Generated blueprints later may author initial state** but must not become live gameplay authority after sector instantiation.
 
 Critical invariants:
-- discovered resource != train-owned resource;
-- crew outside = cannot depart;
-- discovered wagon != owned wagon;
-- owned wagon is not meaningful until physically coupled into the train;
-- workshop coupled != workshop online;
-- final route decision is physical rail state: the train must occupy a marked exit branch, not select a menu option;
-- final consist order must emerge from physical shunting, not UI reordering.
+- internal runtime fixtures must use source-neutral roles, not raw OSM/ORM tags such as `service=siding`;
+- station, road, creek, bridge, goods shed and industry are world entities/relations, not railway-routing vertices;
+- JSON is canonical at runtime; YAML is reference/authoring only;
+- no real station geometry is copied into shipped fixtures;
+- design priors, observed facts, inferred relationships and gameplay abstractions must remain distinguishable.
 
 ## Explicit Exclusions
-Do NOT implement in Sprint 8:
-- combat, enemies, weapons, stealth or factions;
-- strategic world map or deep recruitment;
-- procedural city/yard overhaul;
-- detailed inventory, encumbrance, crafting, recipes or workshop production queues;
-- technology tree or upgrade tree;
-- signalling/dispatch simulation;
-- multiple independent player trains;
-- major railway physics rewrites;
-- weather survival, save/load, final art, audio production or polished onboarding.
+Do NOT implement in Sprint 9A:
+- procedural sector generation;
+- semantic graph randomisation;
+- rail geometry embedding;
+- generated POI or rolling-stock placement;
+- shunting solvability search;
+- runtime `RailMovement` data loading;
+- changes to coupling, point physics, crew tasks or sector lifecycle;
+- YAML parsing dependency at runtime;
+- OSM/ORM data import pipeline;
+- signalling/interlocking, timetable simulation, combat, factions, trading, weather, save/load or final art.
 
 ## Automated Acceptance
-- [x] First-session scenario initialises with the expected train, crew, resources and opening sector problem.
-- [x] Workshop wagon `W` is not initially part of the player's train.
-- [x] Opening obstruction blocks departure/progress until resolved by a physical crew interaction.
-- [x] Sprint 7 scavenging semantics remain intact: search discovers, hauling/deposit transfers ownership.
-- [x] Onboard fault creates valid physical work and clears only after task completion.
-- [x] Sector 0 departure obeys existing diesel/crew/blocker rules and disposes the old sector.
-- [x] Industrial sector loads with a physically separate workshop wagon.
-- [x] Only real endpoint coupling makes `W` part of the train consist.
-- [x] Workshop activation requires the wagon to be attached, consumes the designed resource cost and completes through crew work.
-- [x] Final route branch choice changes real run/next-sector state.
-- [x] Workshop wagon persists across the next sector transition.
-- [x] All Sprint 1-7 regression tests remain green.
+- [x] Research reports are present as raw inputs.
+- [x] Curated worldgen docs identify the semantic-first approach and provenance rules.
+- [x] Runtime JSON schema/archetype files are versioned.
+- [x] Human-readable YAML reference archetype exists but is not required by runtime validation.
+- [x] Canonical fixtures use source-neutral railway roles instead of raw external map tags.
+- [x] Validator accepts the valid central European small-town station fixture.
+- [x] Validator rejects a missing-entry fixture with an entry-specific error.
+- [x] Validator rejects a bad-reference fixture naming the unknown node.
+- [x] Test-seed contract records fixed future acceptance seeds.
+- [x] Existing Sprint 1-8 regression tests remain green.
 - [x] Headless launch has no parse/compile/runtime script errors.
 
-## Human Playtest Gate
-Sprint 8 is not complete until the following is verified in the Godot GUI:
-1. Drive the starting train.
-2. Encounter the obstruction and stop.
-3. Send crew out physically.
-4. Search/retrieve/deposit useful supplies.
-5. Return crew to the train.
-6. Resolve the onboard fault through physical crew work.
-7. Depart Sector 0 irreversibly.
-8. Enter the industrial sector.
-9. Discover workshop wagon `W` as a physical yard vehicle.
-10. Use yard operations and shunting to physically couple `W`.
-11. Activate the workshop through crew work.
-12. Use route intel and drive onto a marked exit branch to make the final route/resource/recruitment-style decision.
-13. Depart with `W` still attached and persistent.
+## Human Review Gate
+Sprint 9A has no playable procedural-sector UAT. It is complete when the user accepts that the schema, fixtures, docs and validator are the right foundation for Sprint 9B.
 
 ## Definition of Done
-Sprint 8 is complete only after automated validation passes and the human playtest gate above is accepted by the user.
+Sprint 9A is complete only after the 9A automated test passes, the existing regression suite remains green, and the user accepts the schema/docs direction.
 
 ## Next Possible Increment
-Post-vertical-slice features only after Sprint 8 human UAT passes.
+Sprint 9B — Deterministic Semantic Railway Generation.
+
+Do not begin 9B until 9A is accepted. 9B may generate semantic graphs from seeds but still must not embed physical rail geometry or replace live railway authority.

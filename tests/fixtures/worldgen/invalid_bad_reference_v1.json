@@ -1,0 +1,35 @@
+{
+  "grammar_version": "central_eu_small_town_station_v1",
+  "generator_version": "9a_schema_v1",
+  "fixture_id": "invalid_bad_reference_v1",
+  "rail_graph": {
+    "entry_node": "west_entry",
+    "exit_node": "east_exit",
+    "nodes": [
+      { "id": "west_entry", "type": "ENTRY" },
+      { "id": "east_exit", "type": "EXIT" }
+    ],
+    "edges": [
+      {
+        "id": "main_bad",
+        "role": "THROUGH_MAIN",
+        "from": "west_entry",
+        "to": "unknown_node",
+        "bidirectional": true
+      }
+    ]
+  },
+  "world_graph": {
+    "entities": [
+      { "id": "station", "type": "STATION" }
+    ],
+    "relations": [
+      {
+        "id": "station_on_bad_edge",
+        "type": "ADJACENT_TO_TRACK",
+        "from_entity": "station",
+        "to_edge": "main_bad"
+      }
+    ]
+  }
+}

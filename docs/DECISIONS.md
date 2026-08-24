@@ -105,3 +105,7 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-026 — Route choice is physical rail egress
 **Decision:** Sprint 8's final route decision is made by driving the upgraded train across one of the authored exit branches. Route intel and labels explain where each branch leads, but no menu command chooses the route. The sector/lifecycle exit state tells the scenario which branch was crossed, and only then is persistent run route metadata written.
 **Reason:** Route choice should reinforce the core railway premise: track topology, switch state and physical train position determine where the colony goes next.
+
+## D-027 — Procedural railway generation starts with semantic graphs
+**Decision:** Sprint 9 worldgen represents railway meaning as a source-neutral semantic rail graph plus a separate world relationship graph before any physical geometry or gameplay placement is generated. Runtime fixtures use canonical JSON and internal roles such as `THROUGH_MAIN`, `PASSING_LOOP`, `GOODS_YARD_TRACK` and `AGRICULTURAL_SPUR`; raw external map tags remain research provenance only.
+**Reason:** Procedural sectors need railway places the game can reason about without copying real station geometry, depending on OSM/ORM tags at runtime, or replacing the validated `RailMovement`, crew, POI and sector-lifecycle authorities.

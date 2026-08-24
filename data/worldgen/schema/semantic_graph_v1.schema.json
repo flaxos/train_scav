@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "train_scav.semantic_graph_v1",
+  "title": "Train Scav Semantic Railway/World Graph v1",
+  "type": "object",
+  "required": ["grammar_version", "generator_version", "rail_graph", "world_graph"],
+  "properties": {
+    "grammar_version": {
+      "const": "central_eu_small_town_station_v1"
+    },
+    "generator_version": {
+      "const": "9a_schema_v1"
+    },
+    "rail_graph": {
+      "type": "object",
+      "required": ["entry_node", "exit_node", "nodes", "edges"],
+      "properties": {
+        "entry_node": { "type": "string" },
+        "exit_node": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": {
+                "enum": ["ENTRY", "EXIT", "SWITCH", "JOINT", "BUFFER_STOP"]
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "from", "to"],
+            "properties": {
+              "id": { "type": "string" },
+              "role": {
+                "enum": [
+                  "THROUGH_MAIN",
+                  "PASSING_LOOP",
+                  "PLATFORM_TRACK",
+                  "GOODS_YARD_TRACK",
+                  "LOADING_TRACK",
+                  "HEADSHUNT",
+                  "INDUSTRIAL_SPUR",
+                  "AGRICULTURAL_SPUR",
+                  "STORAGE_TRACK",
+                  "DEPOT_TRACK",
+                  "CROSSOVER",
+                  "ABANDONED_TRACK"
+                ]
+              },
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "bidirectional": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "world_graph": {
+      "type": "object",
+      "required": ["entities", "relations"],
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "type", "from_entity"],
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string" },
+              "from_entity": { "type": "string" },
+              "to_entity": { "type": "string" },
+              "to_edge": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

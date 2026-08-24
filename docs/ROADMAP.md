@@ -174,22 +174,35 @@ Combine the systems into the agreed first-30-minute structure:
 Acceptance:
 > A fresh player can complete one meaningful travel→stop→explore→shunt→upgrade→depart cycle and understand why the train and its physical configuration matter.
 
-## Phase C — Post-validation systems
+## Phase C — Depth, Variety & Replayability
 
-Only after the vertical slice is fun:
-- deeper procedural sector variety;
-- additional rolling stock;
-- locomotive acquisition and multi-loco operation;
-- richer survivor simulation;
-- combat/threat systems;
-- factions/trading;
-- weather/environmental hazards;
-- damaged bridges/tunnels/track repair;
-- improved UI/onboarding;
-- full save/load;
-- difficulty/world configuration;
-- generated/authored art pipeline;
-- audio and presentation.
+Only after the vertical slice is fun, Phase C should deepen the systems that make repeated runs feel different without losing the physical train/sector focus.
+
+| Sprint | Focus | Why now |
+| --- | --- | --- |
+| 9A | Railway grammar research & schema | Converts deep research into source-neutral, versioned docs, JSON schema, fixtures and validation before implementation. |
+| 9B | Deterministic semantic railway generation | Produces seed-derived railway/world meaning while staying independent of physical geometry. |
+| 9C | Semantic graph to physical sector geometry | Embeds valid semantic graphs into playable track/world layouts. |
+| 9D | Procedural world gameplay integration | Connects generated POIs, rolling stock, problems and route decisions to existing systems. |
+| 10 | Rolling-stock ecosystem | Gives generated yards meaningful things to contain and recover. |
+| 11 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock variety exists. |
+| 12 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
+| 13 | Survivor depth | Makes expedition and job decisions more consequential after world variety exists. |
+| 14 | Settlements, factions & trading | Gives people, resources and route choices persistent external meaning. |
+| 15 | Threats/combat | Adds danger after non-combat exploration already has depth. |
+| 16 | Run systems | Adds save/load, difficulty, world config and run setup once the loop is stable. |
+| 17 | Player UX pass | Improves onboarding, information architecture and controls after the systems settle. |
+| 18 | Presentation pipeline | Adds generated/authored art, audio and environmental presentation after gameplay shape is proven. |
+
+### Sprint 9 — Procedural Railway & World Grammar
+
+Sprint 9 is split into gated increments so procedural variety does not rewrite validated railway gameplay in one large step.
+
+9A acceptance:
+> The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
+
+9D acceptance:
+> Fixed generated-sector seeds produce deterministic, visibly different and solvable travel -> stop -> explore -> shunt -> depart opportunities while preserving Sprint 1-8 regression behavior.
 
 ## Phase D — Demo
 
