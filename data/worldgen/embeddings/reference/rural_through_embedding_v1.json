@@ -1,0 +1,28 @@
+{
+  "embedding_version": "sprint9e_rural_through_embedding_v1",
+  "archetype_id": "rural_through",
+  "fixture_path": "res://data/worldgen/archetypes/reference/rural_through_v1.json",
+  "runtime_layout_id": "sprint9e_rural_through_v1",
+  "entry_segment": "rural_main",
+  "entry_distance": 24.0,
+  "exit_segment": "rural_main",
+  "exit_distance": 900.0,
+  "segments": [
+    {
+      "runtime_segment_id": "rural_main",
+      "semantic_edge_id": "rural_main",
+      "points": [[120.0, 360.0], [1080.0, 360.0]],
+      "end_b_block_reason": "End of rural through line"
+    }
+  ],
+  "points": [],
+  "next_connections": {},
+  "previous_connections": {},
+  "route_presets": [
+    {
+      "id": "main",
+      "label": "Through main",
+      "routes": {}
+    }
+  ]
+}

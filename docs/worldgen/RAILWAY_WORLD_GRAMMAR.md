@@ -103,3 +103,16 @@ For the small-town goods station, the west semantic station throat is embedded a
 - a west loop turnout selecting platform main or passing loop.
 
 This decomposition is runtime placement detail. It does not add new semantic ontology and does not imply a procedural spatial solver exists.
+
+## Sprint 9E Multi-Archetype Runtime Reconstruction
+Sprint 9E adds authored spatial embeddings for all six Sprint 9B reference archetypes and reconstructs each through the same runtime path.
+
+The embedding layer remains separate from semantic meaning:
+- semantic fixtures describe the railway/world graph;
+- embeddings describe authored physical placement for reference layouts;
+- `WorldgenRuntimeReconstructor` translates generic embedding data;
+- `RailMovement` remains the live movement authority.
+
+Route presets are development-harness convenience metadata only. They apply ordinary turnout settings and do not create a second routing system.
+
+Declining/disused railway is represented by mapping `ABANDONED_TRACK` edges to display-only runtime segments. These segments are visible and retain semantic IDs, but they are excluded from active movement connections and cannot satisfy active routing.

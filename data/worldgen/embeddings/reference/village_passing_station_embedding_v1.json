@@ -1,0 +1,108 @@
+{
+  "embedding_version": "sprint9e_village_passing_station_embedding_v1",
+  "archetype_id": "village_passing_station",
+  "fixture_path": "res://data/worldgen/archetypes/reference/village_passing_station_v1.json",
+  "runtime_layout_id": "sprint9e_village_passing_station_v1",
+  "entry_segment": "main_west",
+  "entry_distance": 24.0,
+  "exit_segment": "main_east",
+  "exit_distance": 180.0,
+  "segments": [
+    {
+      "runtime_segment_id": "main_west",
+      "semantic_edge_id": "main_west",
+      "points": [[120.0, 360.0], [360.0, 360.0]],
+      "end_b_block_reason": "No route through west loop switch"
+    },
+    {
+      "runtime_segment_id": "platform_main",
+      "semantic_edge_id": "platform_main",
+      "points": [[360.0, 360.0], [780.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks platform main"
+    },
+    {
+      "runtime_segment_id": "passing_loop",
+      "semantic_edge_id": "passing_loop",
+      "points": [[360.0, 360.0], [430.0, 425.0], [710.0, 425.0], [780.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks passing loop"
+    },
+    {
+      "runtime_segment_id": "main_east",
+      "semantic_edge_id": "main_east",
+      "points": [[780.0, 360.0], [1080.0, 360.0]],
+      "end_b_block_reason": "End of village east exit"
+    }
+  ],
+  "points": [
+    {
+      "runtime_point_id": "west_loop_switch",
+      "semantic_node_id": "west_loop_switch",
+      "position": [360.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    },
+    {
+      "runtime_point_id": "east_loop_switch",
+      "semantic_node_id": "east_loop_switch",
+      "position": [780.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    }
+  ],
+  "next_connections": {
+    "main_west": {
+      "point": "west_loop_switch",
+      "routes": {
+        "platform": "platform_main",
+        "loop": "passing_loop"
+      }
+    },
+    "platform_main": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "platform"
+    },
+    "passing_loop": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "loop"
+    }
+  },
+  "previous_connections": {
+    "platform_main": {
+      "segment": "main_west",
+      "requires_point": "west_loop_switch",
+      "requires_route": "platform"
+    },
+    "passing_loop": {
+      "segment": "main_west",
+      "requires_point": "west_loop_switch",
+      "requires_route": "loop"
+    },
+    "main_east": {
+      "point": "east_loop_switch",
+      "routes": {
+        "platform": "platform_main",
+        "loop": "passing_loop"
+      }
+    }
+  },
+  "route_presets": [
+    {
+      "id": "main",
+      "label": "Platform main",
+      "routes": {
+        "west_loop_switch": "platform",
+        "east_loop_switch": "platform"
+      }
+    },
+    {
+      "id": "loop",
+      "label": "Passing loop",
+      "routes": {
+        "west_loop_switch": "loop",
+        "east_loop_switch": "loop"
+      }
+    }
+  ]
+}

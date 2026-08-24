@@ -24,7 +24,9 @@ Sprint 9 should progress through gated increments:
   ↓
 9D: one authored blueprint plus authored embedding reconstructed into RailMovement
   ↓
-9E+: deterministic semantic generation, broader embedding, POIs, rolling stock, problems, solvability and UAT
+9E: all six authored reference blueprints plus authored embeddings reconstructed into RailMovement
+  ↓
+9F+: deterministic semantic generation, broader procedural embedding, POIs, rolling stock, problems, solvability and UAT
 ```
 
 Sprint numbering after 9C may be revised by an explicit sprint plan, but 9C itself is only semantic validation.
@@ -90,6 +92,26 @@ SectorDefinition -> existing authored sector setup -> existing runtime systems
 
 9D does not make `SectorDefinition` automatically generate or attach blueprints.
 
+## Sprint 9E Boundary
+9E is a breadth proof for authored runtime reconstruction:
+
+```text
+each Sprint 9B reference SectorBlueprint
+  -> 9C semantic validation
+  -> authored spatial embedding
+  -> WorldgenRuntimeReconstructor
+  -> RailMovement.configure_track_layout()
+  -> dedicated multi-archetype harness
+```
+
+The same reconstructor interprets generic embedding data for all six archetypes. Archetype differences belong in semantic fixtures and authored embeddings, not in reconstruction branches.
+
+Route presets are optional harness metadata that set ordinary point routes. They are not a new route planner or movement authority.
+
+`ABANDONED_TRACK` can be represented as display-only runtime geometry. It remains mapped to semantic edges for inspection, but is rejected if an embedding attempts to include it in active movement connections.
+
+9E does not make `SectorDefinition`, `SectorLifecycle` or production `Main.tscn` use semantic reconstruction.
+
 ## Future Pipeline Shape
 When generation is explicitly promoted into a later sprint, the likely long-term sector creation shape is:
 
@@ -152,6 +174,21 @@ Do not implement these in 9D:
 - shunting-solvability search;
 - train-length/headshunt clearance solving;
 - active `SectorLifecycle` replacement.
+
+## Deferred From 9E
+Do not implement these in 9E:
+- seeded semantic generation;
+- RNG streams;
+- archetype selection or weighted topology choices;
+- automatic spatial solving;
+- terrain, generated rivers, roads, bridges, towns or POIs;
+- rolling-stock procedural placement;
+- damage/gameplay mutations;
+- abandoned-track repair or recommissioning;
+- shunting-solvability search;
+- train-length/headshunt clearance solving;
+- seed sweeps;
+- active `SectorLifecycle` integration.
 
 ## Validation Direction
 9B validation is intentionally cheap:

@@ -1,0 +1,180 @@
+{
+  "embedding_version": "sprint9e_declining_abandoned_branch_embedding_v1",
+  "archetype_id": "declining_abandoned_branch",
+  "fixture_path": "res://data/worldgen/archetypes/reference/declining_abandoned_branch_v1.json",
+  "runtime_layout_id": "sprint9e_declining_abandoned_branch_v1",
+  "entry_segment": "main_west",
+  "entry_distance": 24.0,
+  "exit_segment": "main_east",
+  "exit_distance": 180.0,
+  "segments": [
+    {
+      "runtime_segment_id": "main_west",
+      "semantic_edge_id": "main_west",
+      "points": [[120.0, 360.0], [340.0, 360.0]],
+      "end_b_block_reason": "No route through west yard switch"
+    },
+    {
+      "runtime_segment_id": "declining_station_throat",
+      "semantic_edge_id": "",
+      "label": "authored connector: separates old yard from loop throat",
+      "points": [[340.0, 360.0], [440.0, 360.0]],
+      "end_b_block_reason": "No route through west loop switch"
+    },
+    {
+      "runtime_segment_id": "worn_platform_main",
+      "semantic_edge_id": "worn_platform_main",
+      "points": [[440.0, 360.0], [760.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks worn platform main"
+    },
+    {
+      "runtime_segment_id": "rusty_passing_loop",
+      "semantic_edge_id": "rusty_passing_loop",
+      "points": [[440.0, 360.0], [520.0, 420.0], [680.0, 420.0], [760.0, 360.0]],
+      "end_b_block_reason": "East loop switch route blocks rusty passing loop"
+    },
+    {
+      "runtime_segment_id": "main_east",
+      "semantic_edge_id": "main_east",
+      "points": [[760.0, 360.0], [1060.0, 360.0]],
+      "end_b_block_reason": "End of declining branch east exit"
+    },
+    {
+      "runtime_segment_id": "old_goods_lead",
+      "semantic_edge_id": "old_goods_lead",
+      "points": [[340.0, 360.0], [440.0, 440.0], [560.0, 500.0]],
+      "end_b_block_reason": "End of old goods lead"
+    },
+    {
+      "runtime_segment_id": "overgrown_storage",
+      "semantic_edge_id": "overgrown_storage",
+      "points": [[560.0, 500.0], [700.0, 520.0], [850.0, 520.0]],
+      "end_b_block_reason": "End of overgrown storage buffer"
+    },
+    {
+      "runtime_segment_id": "abandoned_loading_track",
+      "semantic_edge_id": "abandoned_loading_track",
+      "runtime_status": "display_only",
+      "points": [[560.0, 500.0], [720.0, 560.0], [870.0, 560.0]],
+      "end_b_block_reason": "Abandoned loading track is not routable"
+    },
+    {
+      "runtime_segment_id": "removed_branch_stub",
+      "semantic_edge_id": "removed_branch_stub",
+      "runtime_status": "display_only",
+      "points": [[560.0, 500.0], [630.0, 455.0]],
+      "end_b_block_reason": "Removed branch stub is not routable"
+    }
+  ],
+  "points": [
+    {
+      "runtime_point_id": "west_yard_switch",
+      "semantic_node_id": "west_loop_switch",
+      "position": [340.0, 360.0],
+      "routes": ["main", "old_yard"],
+      "initial_route": "main"
+    },
+    {
+      "runtime_point_id": "west_loop_switch",
+      "semantic_node_id": "west_loop_switch",
+      "position": [440.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    },
+    {
+      "runtime_point_id": "east_loop_switch",
+      "semantic_node_id": "east_loop_switch",
+      "position": [760.0, 360.0],
+      "routes": ["platform", "loop"],
+      "initial_route": "platform"
+    }
+  ],
+  "next_connections": {
+    "main_west": {
+      "point": "west_yard_switch",
+      "routes": {
+        "main": "declining_station_throat",
+        "old_yard": "old_goods_lead"
+      }
+    },
+    "declining_station_throat": {
+      "point": "west_loop_switch",
+      "routes": {
+        "platform": "worn_platform_main",
+        "loop": "rusty_passing_loop"
+      }
+    },
+    "worn_platform_main": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "platform"
+    },
+    "rusty_passing_loop": {
+      "segment": "main_east",
+      "requires_point": "east_loop_switch",
+      "requires_route": "loop"
+    },
+    "old_goods_lead": {
+      "segment": "overgrown_storage"
+    }
+  },
+  "previous_connections": {
+    "declining_station_throat": {
+      "segment": "main_west",
+      "requires_point": "west_yard_switch",
+      "requires_route": "main"
+    },
+    "old_goods_lead": {
+      "segment": "main_west",
+      "requires_point": "west_yard_switch",
+      "requires_route": "old_yard"
+    },
+    "worn_platform_main": {
+      "segment": "declining_station_throat",
+      "requires_point": "west_loop_switch",
+      "requires_route": "platform"
+    },
+    "rusty_passing_loop": {
+      "segment": "declining_station_throat",
+      "requires_point": "west_loop_switch",
+      "requires_route": "loop"
+    },
+    "main_east": {
+      "point": "east_loop_switch",
+      "routes": {
+        "platform": "worn_platform_main",
+        "loop": "rusty_passing_loop"
+      }
+    },
+    "overgrown_storage": {
+      "segment": "old_goods_lead"
+    }
+  },
+  "route_presets": [
+    {
+      "id": "main",
+      "label": "Worn platform main",
+      "routes": {
+        "west_yard_switch": "main",
+        "west_loop_switch": "platform",
+        "east_loop_switch": "platform"
+      }
+    },
+    {
+      "id": "loop",
+      "label": "Rusty passing loop",
+      "routes": {
+        "west_yard_switch": "main",
+        "west_loop_switch": "loop",
+        "east_loop_switch": "loop"
+      }
+    },
+    {
+      "id": "old_storage",
+      "label": "Overgrown storage",
+      "routes": {
+        "west_yard_switch": "old_yard"
+      }
+    }
+  ]
+}

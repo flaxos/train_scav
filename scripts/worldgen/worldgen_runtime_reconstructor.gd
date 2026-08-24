@@ -3,6 +3,10 @@ class_name WorldgenRuntimeReconstructor
 
 const WorldgenSchemaValidator := preload("res://scripts/worldgen/worldgen_schema_validator.gd")
 
+const ROLE_ABANDONED_TRACK := "ABANDONED_TRACK"
+const STATUS_ACTIVE := "active"
+const STATUS_DISPLAY_ONLY := "display_only"
+
 
 func reconstruct_runtime_layout(blueprint: RefCounted, embedding: Dictionary, validator: RefCounted = null) -> Dictionary:
 	var diagnostics: Array[Dictionary] = []
@@ -85,12 +89,14 @@ func _build_layout(embedding: Dictionary, edge_by_id: Dictionary, diagnostics: A
 			if not semantic_map.has(semantic_edge_id):
 				semantic_map[semantic_edge_id] = []
 			(semantic_map[semantic_edge_id] as Array).append(runtime_segment_id)
+		var runtime_status := _runtime_status_for_segment(segment, role)
 
 		segments[runtime_segment_id] = points
 		segment_semantics[runtime_segment_id] = {
 			"semantic_edge_id": semantic_edge_id,
 			"semantic_role": role,
 			"label": str(segment.get("label", "")),
+			"runtime_status": runtime_status,
 		}
 		endpoint_b_block_reasons[runtime_segment_id] = str(segment.get("end_b_block_reason", "End of track"))
 
@@ -125,8 +131,8 @@ func _build_layout(embedding: Dictionary, edge_by_id: Dictionary, diagnostics: A
 			"initial_route": initial_route,
 		}
 
-	_validate_connections(embedding.get("next_connections", {}) as Dictionary, segments, point_definitions, diagnostics, "next")
-	_validate_connections(embedding.get("previous_connections", {}) as Dictionary, segments, point_definitions, diagnostics, "previous")
+	_validate_connections(embedding.get("next_connections", {}) as Dictionary, segments, segment_semantics, point_definitions, diagnostics, "next")
+	_validate_connections(embedding.get("previous_connections", {}) as Dictionary, segments, segment_semantics, point_definitions, diagnostics, "previous")
 	if not diagnostics.is_empty():
 		return {}
 
@@ -144,6 +150,7 @@ func _build_layout(embedding: Dictionary, edge_by_id: Dictionary, diagnostics: A
 		"next_connections": (embedding.get("next_connections", {}) as Dictionary).duplicate(true),
 		"previous_connections": (embedding.get("previous_connections", {}) as Dictionary).duplicate(true),
 		"endpoint_b_block_reasons": endpoint_b_block_reasons,
+		"route_presets": (embedding.get("route_presets", []) as Array).duplicate(true),
 		"canonical_topology": _make_canonical_topology(embedding, semantic_map),
 	}
 
@@ -151,6 +158,7 @@ func _build_layout(embedding: Dictionary, edge_by_id: Dictionary, diagnostics: A
 func _validate_connections(
 	connections: Dictionary,
 	segments: Dictionary,
+	segment_semantics: Dictionary,
 	point_definitions: Dictionary,
 	diagnostics: Array[Dictionary],
 	label: String
@@ -160,17 +168,27 @@ func _validate_connections(
 		if not segments.has(segment_id):
 			_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_SEGMENT", "%s connection references unknown segment %s" % [label, segment_id], segment_id)
 			continue
+		if _is_display_only_segment(segment_semantics, segment_id):
+			_add_diagnostic(diagnostics, "DISPLAY_ONLY_SEGMENT_ROUTED", "%s connection starts from display-only segment %s" % [label, segment_id], segment_id)
+			continue
 		var connection := connections[raw_segment_id] as Dictionary
-		if connection.has("segment") and not segments.has(str(connection.get("segment", ""))):
-			_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_SEGMENT", "%s connection from %s references unknown target" % [label, segment_id], segment_id)
+		if connection.has("segment"):
+			var target_segment := str(connection.get("segment", ""))
+			if not segments.has(target_segment):
+				_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_SEGMENT", "%s connection from %s references unknown target" % [label, segment_id], segment_id)
+			elif _is_display_only_segment(segment_semantics, target_segment):
+				_add_diagnostic(diagnostics, "DISPLAY_ONLY_SEGMENT_ROUTED", "%s connection from %s targets display-only segment %s" % [label, segment_id, target_segment], target_segment)
 		if connection.has("point") and not point_definitions.has(str(connection.get("point", ""))):
 			_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_POINT", "%s connection from %s references unknown point" % [label, segment_id], segment_id, str(connection.get("point", "")))
 		if connection.has("requires_point") and not point_definitions.has(str(connection.get("requires_point", ""))):
 			_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_POINT", "%s connection from %s references unknown required point" % [label, segment_id], segment_id, str(connection.get("requires_point", "")))
 		var route_targets := connection.get("routes", {}) as Dictionary
 		for raw_route in route_targets.keys():
-			if not segments.has(str(route_targets[raw_route])):
+			var route_target := str(route_targets[raw_route])
+			if not segments.has(route_target):
 				_add_diagnostic(diagnostics, "RUNTIME_CONNECTION_UNKNOWN_SEGMENT", "%s route %s from %s references unknown target" % [label, str(raw_route), segment_id], segment_id)
+			elif _is_display_only_segment(segment_semantics, route_target):
+				_add_diagnostic(diagnostics, "DISPLAY_ONLY_SEGMENT_ROUTED", "%s route %s from %s targets display-only segment %s" % [label, str(raw_route), segment_id, route_target], route_target)
 
 
 func _make_canonical_topology(embedding: Dictionary, semantic_map: Dictionary) -> Dictionary:
@@ -182,8 +200,23 @@ func _make_canonical_topology(embedding: Dictionary, semantic_map: Dictionary) -
 		"points": (embedding.get("points", []) as Array).duplicate(true),
 		"next_connections": (embedding.get("next_connections", {}) as Dictionary).duplicate(true),
 		"previous_connections": (embedding.get("previous_connections", {}) as Dictionary).duplicate(true),
+		"route_presets": (embedding.get("route_presets", []) as Array).duplicate(true),
 		"semantic_edge_to_runtime_segments": semantic_map.duplicate(true),
 	}
+
+
+func _runtime_status_for_segment(segment: Dictionary, semantic_role: String) -> String:
+	var explicit_status := str(segment.get("runtime_status", ""))
+	if explicit_status == STATUS_DISPLAY_ONLY:
+		return STATUS_DISPLAY_ONLY
+	if semantic_role == ROLE_ABANDONED_TRACK:
+		return STATUS_DISPLAY_ONLY
+	return STATUS_ACTIVE
+
+
+func _is_display_only_segment(segment_semantics: Dictionary, segment_id: String) -> bool:
+	var semantics := segment_semantics.get(segment_id, {}) as Dictionary
+	return str(semantics.get("runtime_status", STATUS_ACTIVE)) == STATUS_DISPLAY_ONLY
 
 
 func _index_edges(data: Dictionary) -> Dictionary:

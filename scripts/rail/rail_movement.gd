@@ -30,6 +30,8 @@ const CONDITION_DAMAGED := "damaged"
 const CONTACT_EPSILON := 0.01
 const COUPLER_FRONT := "front"
 const COUPLER_REAR := "rear"
+const SEGMENT_STATUS_ACTIVE := "active"
+const SEGMENT_STATUS_DISPLAY_ONLY := "display_only"
 
 const UNIT_LOCOMOTIVE := "locomotive"
 const UNIT_SHUNTER := "shunter"
@@ -259,6 +261,7 @@ func get_runtime_topology_snapshot() -> Dictionary:
 			"points": _vector_points_to_pairs(_get_segment_points(segment_id)),
 			"semantic_edge_id": str(semantics.get("semantic_edge_id", "")),
 			"semantic_role": str(semantics.get("semantic_role", "")),
+			"runtime_status": str(semantics.get("runtime_status", SEGMENT_STATUS_ACTIVE)),
 		}
 
 	var points: Dictionary = {}
@@ -290,6 +293,11 @@ func get_segment_semantic_id(segment_id: String) -> String:
 func get_segment_semantic_role(segment_id: String) -> String:
 	var semantics := _layout_segment_semantics.get(segment_id, {}) as Dictionary
 	return str(semantics.get("semantic_role", ""))
+
+
+func get_segment_runtime_status(segment_id: String) -> String:
+	var semantics := _layout_segment_semantics.get(segment_id, {}) as Dictionary
+	return str(semantics.get("runtime_status", SEGMENT_STATUS_ACTIVE))
 
 
 func get_point_ids() -> Array[String]:
@@ -1421,15 +1429,24 @@ func _validate_track_layout(layout: Dictionary, diagnostics: Array[Dictionary]) 
 	var entry_segment := str(layout.get("entry_segment", ""))
 	if not entry_segment.is_empty() and not segments.has(entry_segment):
 		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_ENTRY_SEGMENT_INVALID", "entry segment %s is not in layout" % entry_segment, entry_segment)
+	if not entry_segment.is_empty() and _is_layout_display_only_segment(layout, entry_segment):
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_ENTRY_SEGMENT_DISPLAY_ONLY", "entry segment %s is display-only" % entry_segment, entry_segment)
 
-	_validate_runtime_connections(layout.get("next_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, diagnostics)
-	_validate_runtime_connections(layout.get("previous_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, diagnostics)
+	var exit_segment := str(layout.get("exit_segment", ""))
+	if not exit_segment.is_empty() and not segments.has(exit_segment):
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_EXIT_SEGMENT_INVALID", "exit segment %s is not in layout" % exit_segment, exit_segment)
+	if not exit_segment.is_empty() and _is_layout_display_only_segment(layout, exit_segment):
+		_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_EXIT_SEGMENT_DISPLAY_ONLY", "exit segment %s is display-only" % exit_segment, exit_segment)
+
+	_validate_runtime_connections(layout.get("next_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, layout.get("segment_semantics", {}) as Dictionary, diagnostics)
+	_validate_runtime_connections(layout.get("previous_connections", {}) as Dictionary, segments, layout.get("points", {}) as Dictionary, layout.get("segment_semantics", {}) as Dictionary, diagnostics)
 
 
 func _validate_runtime_connections(
 	connections: Dictionary,
 	segments: Dictionary,
 	points: Dictionary,
+	segment_semantics: Dictionary,
 	diagnostics: Array[Dictionary]
 ) -> void:
 	for raw_segment_id in connections.keys():
@@ -1437,17 +1454,36 @@ func _validate_runtime_connections(
 		if not segments.has(segment_id):
 			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_SEGMENT_INVALID", "connection references unknown segment %s" % segment_id, segment_id)
 			continue
+		if _is_display_only_segment(segment_semantics, segment_id):
+			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_DISPLAY_ONLY_SEGMENT_ROUTED", "connection starts from display-only segment %s" % segment_id, segment_id)
+			continue
 		var connection := connections[raw_segment_id] as Dictionary
 		if connection.has("point") and not points.has(str(connection.get("point", ""))):
 			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_POINT_INVALID", "connection %s references unknown point" % segment_id, segment_id)
 		if connection.has("requires_point") and not points.has(str(connection.get("requires_point", ""))):
 			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_POINT_INVALID", "connection %s references unknown required point" % segment_id, segment_id)
-		if connection.has("segment") and not segments.has(str(connection.get("segment", ""))):
-			_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_TARGET_INVALID", "connection %s references unknown target segment" % segment_id, segment_id)
+		if connection.has("segment"):
+			var target_segment := str(connection.get("segment", ""))
+			if not segments.has(target_segment):
+				_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_TARGET_INVALID", "connection %s references unknown target segment" % segment_id, segment_id)
+			elif _is_display_only_segment(segment_semantics, target_segment):
+				_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_DISPLAY_ONLY_SEGMENT_ROUTED", "connection %s targets display-only segment %s" % [segment_id, target_segment], target_segment)
 		var routes := connection.get("routes", {}) as Dictionary
 		for raw_route in routes.keys():
-			if not segments.has(str(routes[raw_route])):
+			var target_segment := str(routes[raw_route])
+			if not segments.has(target_segment):
 				_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_CONNECTION_TARGET_INVALID", "route %s from %s references unknown target segment" % [str(raw_route), segment_id], segment_id)
+			elif _is_display_only_segment(segment_semantics, target_segment):
+				_add_layout_diagnostic(diagnostics, "RUNTIME_LAYOUT_DISPLAY_ONLY_SEGMENT_ROUTED", "route %s from %s targets display-only segment %s" % [str(raw_route), segment_id, target_segment], target_segment)
+
+
+func _is_layout_display_only_segment(layout: Dictionary, segment_id: String) -> bool:
+	return _is_display_only_segment(layout.get("segment_semantics", {}) as Dictionary, segment_id)
+
+
+func _is_display_only_segment(segment_semantics: Dictionary, segment_id: String) -> bool:
+	var semantics := segment_semantics.get(segment_id, {}) as Dictionary
+	return str(semantics.get("runtime_status", SEGMENT_STATUS_ACTIVE)) == SEGMENT_STATUS_DISPLAY_ONLY
 
 
 func _apply_track_layout(layout: Dictionary) -> void:

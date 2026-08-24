@@ -159,5 +159,41 @@
       "requires_point": "yard_switch",
       "requires_route": "headshunt"
     }
-  }
+  },
+  "route_presets": [
+    {
+      "id": "main",
+      "label": "Platform main",
+      "routes": {
+        "west_yard_switch": "main",
+        "west_loop_switch": "platform",
+        "east_loop_switch": "platform"
+      }
+    },
+    {
+      "id": "loop",
+      "label": "Passing loop",
+      "routes": {
+        "west_yard_switch": "main",
+        "west_loop_switch": "loop",
+        "east_loop_switch": "loop"
+      }
+    },
+    {
+      "id": "goods_loading",
+      "label": "Goods loading",
+      "routes": {
+        "west_yard_switch": "yard",
+        "yard_switch": "loading"
+      }
+    },
+    {
+      "id": "headshunt",
+      "label": "Yard headshunt",
+      "routes": {
+        "west_yard_switch": "yard",
+        "yard_switch": "headshunt"
+      }
+    }
+  ]
 }

@@ -1,0 +1,121 @@
+{
+  "embedding_version": "sprint9e_agricultural_loading_point_embedding_v1",
+  "archetype_id": "agricultural_loading_point",
+  "fixture_path": "res://data/worldgen/archetypes/reference/agricultural_loading_point_v1.json",
+  "runtime_layout_id": "sprint9e_agricultural_loading_point_v1",
+  "entry_segment": "main_west",
+  "entry_distance": 24.0,
+  "exit_segment": "main_east",
+  "exit_distance": 560.0,
+  "segments": [
+    {
+      "runtime_segment_id": "main_west",
+      "semantic_edge_id": "main_west",
+      "points": [[120.0, 360.0], [380.0, 360.0]],
+      "end_b_block_reason": "No route through agricultural spur switch"
+    },
+    {
+      "runtime_segment_id": "main_east",
+      "semantic_edge_id": "main_east",
+      "points": [[380.0, 360.0], [1080.0, 360.0]],
+      "end_b_block_reason": "End of agricultural east exit"
+    },
+    {
+      "runtime_segment_id": "agricultural_spur",
+      "semantic_edge_id": "agricultural_spur",
+      "points": [[380.0, 360.0], [500.0, 430.0], [620.0, 500.0]],
+      "end_b_block_reason": "No route through loading switch"
+    },
+    {
+      "runtime_segment_id": "grain_loading",
+      "semantic_edge_id": "grain_loading",
+      "points": [[620.0, 500.0], [760.0, 520.0], [900.0, 520.0]],
+      "end_b_block_reason": "End of grain loading buffer"
+    },
+    {
+      "runtime_segment_id": "short_runaround",
+      "semantic_edge_id": "short_runaround",
+      "points": [[620.0, 500.0], [760.0, 585.0], [920.0, 585.0]],
+      "end_b_block_reason": "End of agricultural headshunt buffer"
+    }
+  ],
+  "points": [
+    {
+      "runtime_point_id": "spur_switch",
+      "semantic_node_id": "spur_switch",
+      "position": [380.0, 360.0],
+      "routes": ["main", "spur"],
+      "initial_route": "main"
+    },
+    {
+      "runtime_point_id": "loading_switch",
+      "semantic_node_id": "loading_switch",
+      "position": [620.0, 500.0],
+      "routes": ["loading", "headshunt"],
+      "initial_route": "loading"
+    }
+  ],
+  "next_connections": {
+    "main_west": {
+      "point": "spur_switch",
+      "routes": {
+        "main": "main_east",
+        "spur": "agricultural_spur"
+      }
+    },
+    "agricultural_spur": {
+      "point": "loading_switch",
+      "routes": {
+        "loading": "grain_loading",
+        "headshunt": "short_runaround"
+      }
+    }
+  },
+  "previous_connections": {
+    "main_east": {
+      "segment": "main_west",
+      "requires_point": "spur_switch",
+      "requires_route": "main"
+    },
+    "agricultural_spur": {
+      "segment": "main_west",
+      "requires_point": "spur_switch",
+      "requires_route": "spur"
+    },
+    "grain_loading": {
+      "segment": "agricultural_spur",
+      "requires_point": "loading_switch",
+      "requires_route": "loading"
+    },
+    "short_runaround": {
+      "segment": "agricultural_spur",
+      "requires_point": "loading_switch",
+      "requires_route": "headshunt"
+    }
+  },
+  "route_presets": [
+    {
+      "id": "main",
+      "label": "Through main",
+      "routes": {
+        "spur_switch": "main"
+      }
+    },
+    {
+      "id": "grain_loading",
+      "label": "Grain loading",
+      "routes": {
+        "spur_switch": "spur",
+        "loading_switch": "loading"
+      }
+    },
+    {
+      "id": "headshunt",
+      "label": "Short headshunt",
+      "routes": {
+        "spur_switch": "spur",
+        "loading_switch": "headshunt"
+      }
+    }
+  ]
+}
