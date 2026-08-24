@@ -24,6 +24,7 @@ const TASK_REPAIR_POINT := "repair_point"
 const TASK_MOVE_ABOARD := "move_aboard"
 const TASK_SEARCH_POI := "search_poi"
 const TASK_HAUL_RESOURCE := "haul_resource"
+const TASK_SCENARIO_INTERACTION := "scenario_interaction"
 
 const STATUS_IDLE := "idle"
 const STATUS_ASSIGNED := "assigned"
@@ -45,6 +46,7 @@ var yard: RefCounted
 var interior: RefCounted
 var sector_pois: RefCounted
 var train_resources: RefCounted
+var scenario_ops: RefCounted
 var needs: RefCounted
 var skills: RefCounted
 var survivors: Array[Dictionary] = []
@@ -159,6 +161,10 @@ func get_selected_survivor_id() -> String:
 func set_scavenging_context(poi_model: RefCounted, resource_store: RefCounted) -> void:
 	sector_pois = poi_model
 	train_resources = resource_store
+
+
+func set_scenario_context(scenario_model: RefCounted) -> void:
+	scenario_ops = scenario_model
 
 
 func get_survivor_state(survivor_id: String) -> Dictionary:
@@ -582,6 +588,68 @@ func assign_haul_poi_resource(survivor_id: String, poi_id: String) -> bool:
 	return true
 
 
+func assign_scenario_interaction(
+	survivor_id: String,
+	action_id: String,
+	target_id: String,
+	target_position: Vector2,
+	target_label: String,
+	interaction_duration: float,
+	data: Dictionary = {},
+	aboard_unit: String = "",
+	aboard_local: Vector2 = Vector2.ZERO
+) -> bool:
+	var index := _find_survivor_index(survivor_id)
+	if index < 0:
+		return false
+	if scenario_ops == null:
+		_fail_survivor(index, TASK_SCENARIO_INTERACTION, "No scenario interaction")
+		return false
+	if action_id == "" or target_id == "":
+		_fail_survivor(index, TASK_SCENARIO_INTERACTION, "Invalid scenario target")
+		return false
+
+	var survivor := survivors[index]
+	var reservation_key := _scenario_reservation_key(target_id)
+	if not _reserve_target(index, TASK_SCENARIO_INTERACTION, reservation_key):
+		return false
+
+	var task_data := data.duplicate(true)
+	task_data["action_id"] = action_id
+	task_data["target_id"] = target_id
+	if aboard_unit != "":
+		if str(survivor.get("spatial_state", "")) != SPATIAL_ABOARD:
+			reservations.erase(reservation_key)
+			_fail_survivor(index, TASK_SCENARIO_INTERACTION, "Must be aboard for this task")
+			return false
+		var host_unit := str(survivor.get("host_unit", ""))
+		if not interior.can_walk_between(host_unit, aboard_unit):
+			reservations.erase(reservation_key)
+			_fail_survivor(index, TASK_SCENARIO_INTERACTION, "No connected interior route")
+			return false
+
+		_release_reservation(survivor)
+		reservations[reservation_key] = str(survivor["id"])
+		survivor["task_type"] = TASK_SCENARIO_INTERACTION
+		survivor["task_status"] = STATUS_ASSIGNED
+		survivor["task_stage"] = STAGE_ABOARD_ROUTE
+		survivor["task_target"] = target_label
+		survivor["task_target_position"] = Vector2.INF
+		task_data["target_unit"] = aboard_unit
+		task_data["target_local"] = interior.clamp_local_position(aboard_unit, aboard_local)
+		task_data["scenario_aboard"] = true
+		survivor["task_data"] = task_data
+		var aboard_speed_mult: float = skills.get_task_speed_multiplier(str(survivor["id"]), action_id)
+		survivor["interaction_remaining"] = interaction_duration / maxf(aboard_speed_mult, 0.1)
+		survivor["reservation_key"] = reservation_key
+		survivor["status_text"] = "Assigned"
+		survivors[index] = survivor
+		return true
+
+	_assign_travel_task(index, TASK_SCENARIO_INTERACTION, target_position, target_label, task_data, interaction_duration, reservation_key)
+	return true
+
+
 func cancel_task(survivor_id: String) -> bool:
 	var index := _find_survivor_index(survivor_id)
 	if index < 0:
@@ -833,8 +901,14 @@ func _step_aboard_route(survivor: Dictionary, delta: float) -> void:
 		survivor["local_offset"] = interior.clamp_local_position(current_unit, next_local)
 		if next_local.distance_to(target_local) <= move_arrival_epsilon:
 			survivor["local_offset"] = target_local
-			survivor["task_status"] = STATUS_COMPLETED
-			survivor["status_text"] = "Arrived in %s" % target_unit
+			if str(survivor.get("task_type", "")) == TASK_SCENARIO_INTERACTION:
+				survivor["task_status"] = STATUS_INTERACTING
+				survivor["status_text"] = "Interacting"
+				if float(survivor.get("interaction_remaining", 0.0)) <= 0.0:
+					survivor["interaction_remaining"] = 0.001
+			else:
+				survivor["task_status"] = STATUS_COMPLETED
+				survivor["status_text"] = "Arrived in %s" % target_unit
 		return
 
 	var units: Array[String] = interior.get_consist_units_for(current_unit)
@@ -1083,6 +1157,23 @@ func _execute_task(index: int) -> void:
 				]
 				survivor["cargo_type"] = ""
 				survivor["cargo_amount"] = 0.0
+		TASK_SCENARIO_INTERACTION:
+			var scenario_data := survivor["task_data"] as Dictionary
+			if scenario_ops == null:
+				succeeded = false
+				failure_reason = "No scenario interaction"
+			elif not scenario_ops.has_method("execute_scenario_interaction"):
+				succeeded = false
+				failure_reason = "Scenario cannot execute task"
+			elif not scenario_ops.execute_scenario_interaction(
+				str(scenario_data.get("action_id", "")),
+				str(scenario_data.get("target_id", "")),
+				str(survivor.get("id", ""))
+			):
+				succeeded = false
+				failure_reason = str(scenario_ops.get("last_status"))
+			else:
+				survivor["status_text"] = str(scenario_ops.get("last_status"))
 		_:
 			succeeded = false
 			failure_reason = "Unknown task"
@@ -1223,6 +1314,10 @@ func _poi_search_reservation_key(poi_id: String) -> String:
 
 func _poi_haul_reservation_key(poi_id: String) -> String:
 	return "poi:haul:%s" % poi_id
+
+
+func _scenario_reservation_key(target_id: String) -> String:
+	return "scenario:%s" % target_id
 
 
 func _yard_reservation_key(target_type: String, target_id: String) -> String:

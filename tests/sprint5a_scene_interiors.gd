@@ -32,7 +32,6 @@ func _init() -> void:
 	_expect(_interior_kind(states, "L") == TrainInterior.KIND_LOCOMOTIVE, "L renders a locomotive interior")
 	_expect(_interior_kind(states, "A") == TrainInterior.KIND_BUNK, "A renders a bunk interior")
 	_expect(_interior_kind(states, "B") == TrainInterior.KIND_STORAGE, "B renders a storage interior")
-	_expect(_interior_kind(states, "W") == TrainInterior.KIND_WORKSHOP, "W renders a workshop interior")
 	_expect(not _boardable(states, "C"), "C advertises no boardable interior")
 
 	scene.crew.select_survivor("marta")
@@ -50,6 +49,10 @@ func _init() -> void:
 	var marta: Dictionary = scene.crew.get_survivor_state("marta")
 	_expect(str(marta.get("host_unit", "")) == "B", "scene UAT movement carries Marta through the connected train to B")
 	_expect((marta.get("local_offset", Vector2.ZERO) as Vector2).distance_to(requested_local) <= 2.1, "Marta ends near the clicked position in B")
+
+	_transition_scene_to_industrial(scene)
+	states = scene.get_train_interior_draw_states()
+	_expect(_interior_kind(states, "W") == TrainInterior.KIND_WORKSHOP, "W renders a workshop interior in the industrial sector")
 
 	_finish()
 
@@ -94,6 +97,17 @@ func _find_unit_state(scene: Node, unit_id: String) -> Dictionary:
 		if str(state.get("id", "")) == unit_id:
 			return state
 	return {}
+
+
+func _transition_scene_to_industrial(scene: Node) -> void:
+	if scene.has_method("get_vertical_slice_state") and scene.scenario != null:
+		scene.scenario.execute_scenario_interaction("clear_obstruction", "opening_obstruction", "olek")
+		scene.scenario.execute_scenario_interaction("repair_onboard_fault", "locomotive_fault", "marta")
+	scene.train_resources.set_amount("diesel", 24.0)
+	_expect(scene.lifecycle.request_transition(), "fixture enters industrial sector for W interior check")
+	scene.rail = scene.lifecycle.current_sector.rail
+	scene.yard = scene.lifecycle.current_sector.yard
+	scene.interior = scene.crew.interior
 
 
 func _interior_kind(states: Array[Dictionary], unit_id: String) -> String:

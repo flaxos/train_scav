@@ -28,7 +28,7 @@ func _init() -> void:
 	_expect(instruction_label.text.contains("Mouse-first"), "instructions present mouse-first UAT operations")
 	_expect(instruction_label.text.contains("Right click"), "instructions explain right-click option menus")
 	_expect(instruction_label.text.contains("Left click menu item"), "instructions explain menu confirmation")
-	_expect(instruction_label.text.contains("S starts damaged"), "instructions explain shunter repair before control")
+	_expect(instruction_label.text.contains("Coupled W != online"), "instructions explain workshop activation after coupling")
 	_expect(instruction_label.text.contains("Drive remains keyboard"), "instructions keep keyboard driving separate from object actions")
 	_expect(not instruction_label.text.contains("P/O"), "primary instructions no longer present P1/P2 as equal-complexity controls")
 	_expect(not instruction_label.text.contains("Y/T"), "primary instructions no longer present P1/P2 remote controls as equal-complexity controls")
@@ -46,21 +46,6 @@ func _init() -> void:
 	_expect(str(scene.crew.get_survivor_state("marta").get("task_target", "")) == "P1", "O remains available as the secondary P1 diagnostic control")
 	scene.crew.cancel_task("marta")
 
-	await _tap_key(scene, KEY_X)
-	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X cannot select damaged shunter before repair")
-
-	await _tap_key(scene, KEY_G)
-	_expect(str(scene.crew.get_survivor_state("marta").get("task_type", "")) == "repair_shunter", "G assigns selected survivor to repair shunter")
-
-	scene.yard.repair_shunter()
-	await _tap_key(scene, KEY_X)
-	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X cannot select repaired shunter until a survivor is aboard S")
-	scene.crew.force_survivor_aboard_unit("marta", "S")
-	await _tap_key(scene, KEY_X)
-	_expect(scene.rail.get_controlled_power_unit_id() == "S", "X explicitly switches control to repaired shunter with crew aboard")
-	await _tap_key(scene, KEY_X)
-	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X explicitly switches control back to main locomotive")
-
 	var before_route: String = scene.rail.points_route
 	await _tap_key(scene, KEY_Y)
 	_expect(scene.rail.get_yard_point_route("P2") == RailMovement.POINTS_MAIN, "remote workshop command does nothing while yard control is offline")
@@ -70,6 +55,24 @@ func _init() -> void:
 	_expect(scene.rail.get_yard_point_route("P2") == RailMovement.POINTS_MAIN, "remote workshop key remains disabled in the normal UAT flow")
 	await _tap_key(scene, KEY_T)
 	_expect(scene.rail.points_route == before_route, "remote P1 key remains disabled in the normal UAT flow")
+
+	_transition_scene_to_industrial(scene)
+
+	await _tap_key(scene, KEY_X)
+	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X cannot select damaged shunter before repair")
+
+	await _tap_key(scene, KEY_G)
+	_expect(str(scene.crew.get_survivor_state("marta").get("task_type", "")) == "repair_shunter", "G assigns selected survivor to repair shunter")
+	scene.crew.cancel_task("marta")
+
+	scene.yard.repair_shunter()
+	await _tap_key(scene, KEY_X)
+	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X cannot select repaired shunter until a survivor is aboard S")
+	scene.crew.force_survivor_aboard_unit("marta", "S")
+	await _tap_key(scene, KEY_X)
+	_expect(scene.rail.get_controlled_power_unit_id() == "S", "X explicitly switches control to repaired shunter with crew aboard")
+	await _tap_key(scene, KEY_X)
+	_expect(scene.rail.get_controlled_power_unit_id() == "L", "X explicitly switches control back to main locomotive")
 
 	scene.rail.select_powered_control("S")
 	scene.crew.force_survivor_yard_position("marta", Vector2(1120.0, 300.0))
@@ -86,7 +89,7 @@ func _init() -> void:
 	var debug_text := debug_label.text
 	_expect(debug_text.contains("Control:"), "debug panel shows explicit powered control")
 	_expect(debug_text.contains("Yard:"), "debug panel shows yard control state")
-	_expect(debug_text.contains("Shunter S:"), "debug overlay shows shunter state")
+	_expect(debug_text.contains("S:"), "debug overlay shows compact shunter state")
 
 	if _failures == 0:
 		print("Sprint 4 scene controls check passed")
@@ -124,6 +127,17 @@ func _send_key(scene: Node, keycode: Key, pressed: bool) -> void:
 	event.physical_keycode = keycode
 	event.pressed = pressed
 	scene._input(event)
+
+
+func _transition_scene_to_industrial(scene: Node) -> void:
+	if scene.has_method("get_vertical_slice_state") and scene.scenario != null:
+		scene.scenario.execute_scenario_interaction("clear_obstruction", "opening_obstruction", "olek")
+		scene.scenario.execute_scenario_interaction("repair_onboard_fault", "locomotive_fault", "marta")
+	scene.train_resources.set_amount("diesel", 24.0)
+	_expect(scene.lifecycle.request_transition(), "fixture enters the industrial sector for shunter control checks")
+	scene.rail = scene.lifecycle.current_sector.rail
+	scene.yard = scene.lifecycle.current_sector.yard
+	scene.interior = scene.crew.interior
 
 
 func _expect(condition: bool, message: String) -> void:

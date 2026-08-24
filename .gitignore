@@ -2,6 +2,7 @@
 .godot/
 .import/
 *.translation
+*.gd.uid
 
 # Local export/cache output.
 export.cfg

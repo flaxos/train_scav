@@ -29,9 +29,9 @@ func test_scene_exposes_resources_pois_and_context_actions() -> void:
 		return
 
 	var resources: Dictionary = scene.get_train_resource_state()
-	_expect(is_equal_approx(float(resources.get(TrainResources.RESOURCE_DIESEL, -1.0)), 6.0), "Sprint 7 fixture starts short of departure diesel")
+	_expect(float(resources.get(TrainResources.RESOURCE_DIESEL, -1.0)) >= TrainResources.DEPARTURE_DIESEL_COST, "Sprint 8 scene starts with enough diesel to begin travel")
 	_expect(is_equal_approx(float(resources.get("departure_cost", -1.0)), TrainResources.DEPARTURE_DIESEL_COST), "resource state exposes departure cost")
-	_expect(not scene.lifecycle.can_depart(), "scene fixture cannot depart before scavenging fuel")
+	_expect(not scene.lifecycle.can_depart(), "scene fixture cannot depart before resolving the opening blocker")
 
 	var pois: Array[Dictionary] = scene.get_sector_poi_states()
 	_expect(pois.size() >= 3, "scene exposes deterministic local POIs")

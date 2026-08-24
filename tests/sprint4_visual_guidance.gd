@@ -32,7 +32,7 @@ func _init() -> void:
 	var icons: Array[Dictionary] = scene.get_anchor_icon_states()
 	_expect(_has_icon(icons, "P2", "switch"), "P2 uses a switch icon instead of an anonymous colored circle")
 	_expect(_has_icon(icons, "yard_power", "power"), "yard power uses a power icon")
-	_expect(_has_icon(icons, "shunter", "repair"), "damaged shunter uses a repair icon")
+	_expect(not _has_icon(icons, "shunter", "repair"), "opening sector hides shunter repair icon until S exists")
 	_expect(_has_icon(icons, "A/B", "joint"), "coupled A/B joint uses an uncoupling/joint icon")
 	var p2_point_state: Dictionary = scene.yard.get_point_state(YardOperations.POINT_P2)
 	var p2_anchor: Vector2 = scene.yard.get_point_anchor(YardOperations.POINT_P2)
@@ -59,18 +59,18 @@ func _init() -> void:
 	var lines: Array[String] = scene.get_uat_tutorial_lines()
 	var tutorial_text := "\n".join(lines)
 	_expect(tutorial_text.contains("UAT Guide"), "scene has an in-game UAT guide")
-	_expect(tutorial_text.contains("Train Scav - Sprint 7 UAT Guide"), "UAT guide names Sprint 7")
-	_expect(tutorial_text.contains("Start diesel is short"), "UAT guide explains the diesel departure blocker")
-	_expect(tutorial_text.contains("Search discovers loot"), "UAT guide explains search versus deposit")
-	_expect(tutorial_text.contains("Departure requires all crew aboard"), "UAT guide explains crew return before departure")
-	_expect(tutorial_text.contains("S starts damaged"), "UAT guide preserves the shunter repair gate")
+	_expect(tutorial_text.contains("Train Scav - Sprint 8 UAT Guide"), "UAT guide names Sprint 8")
+	_expect(tutorial_text.contains("vertical slice"), "UAT guide explains the vertical-slice goal")
+	_expect(tutorial_text.contains("Discover != owned"), "UAT guide explains search versus deposit")
+	_expect(tutorial_text.contains("Departure requires all crew aboard and diesel"), "UAT guide explains crew return and diesel before departure")
+	_expect(tutorial_text.contains("Coupled W != online"), "UAT guide explains workshop activation after coupling")
 	_expect(not tutorial_text.contains("Remote P2"), "UAT guide does not present remote switching as the normal play path")
-	_expect(scene.get_current_uat_step_index() == 0, "fresh UAT guide starts with failed departure")
+	_expect(scene.get_current_uat_step_index() == 0, "fresh UAT guide starts with obstruction stop")
 
-	scene.lifecycle.transition_blocked_reason = "Departure blocked: need 10 diesel"
+	scene.lifecycle.transition_blocked_reason = "Departure blocked: opening obstruction still blocks the route"
 	var survivor_screen: Vector2 = scene.world_to_screen_position(_survivor_position(scene, "marta"))
 	await _click(scene, survivor_screen, MOUSE_BUTTON_LEFT)
-	_expect(scene.get_current_uat_step_index() == 2, "after blocked departure and survivor selection, UAT guide advances to POI search")
+	_expect(scene.get_current_uat_step_index() == 1, "after blocked departure and survivor selection, UAT guide advances to obstruction work")
 
 	var route_segment: Array = scene.rail.get_track_segments()[RailMovement.SEGMENT_SIDING_B]
 	_expect(route_segment.size() >= 6, "workshop siding uses enough rail points for a readable bend")

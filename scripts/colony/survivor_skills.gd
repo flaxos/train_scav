@@ -27,6 +27,9 @@ const _TASK_SKILLS := {
 	"repair_yard_control": SKILL_ENGINEERING,
 	"repair_point": SKILL_ENGINEERING,
 	"connect_power": SKILL_ENGINEERING,
+	"repair_onboard_fault": SKILL_ENGINEERING,
+	"clear_obstruction": SKILL_RAILWAY,
+	"activate_workshop": SKILL_ENGINEERING,
 	"operate_points": SKILL_RAILWAY,
 	"operate_yard_point": SKILL_RAILWAY,
 	"uncouple": SKILL_RAILWAY,
@@ -37,11 +40,13 @@ const _TASK_SKILLS := {
 # Job -> eligible task categories.
 const _JOB_ELIGIBILITY := {
 	JOB_ENGINEER: ["repair_shunter", "repair_yard_control", "repair_point", "connect_power",
-					"operate_points", "operate_yard_point", "uncouple", "couple"],
+					"repair_onboard_fault", "activate_workshop", "operate_points",
+					"operate_yard_point", "uncouple", "couple"],
 	JOB_RAIL_WORKER: ["operate_points", "operate_yard_point", "uncouple", "couple"],
 	JOB_SCAVENGER: [],
 	JOB_MEDIC: [],
 	JOB_GENERALIST: ["repair_shunter", "repair_yard_control", "repair_point", "connect_power",
+					  "repair_onboard_fault", "clear_obstruction", "activate_workshop",
 					  "operate_points", "operate_yard_point", "uncouple", "couple"],
 }
 

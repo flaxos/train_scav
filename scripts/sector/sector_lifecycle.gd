@@ -18,6 +18,7 @@ var previous_sector: SectorInstance
 var crew: RefCounted
 var task_broker: RefCounted
 var train_resources: TrainResources
+var scenario_coordinator: RefCounted
 
 var is_transitioning: bool = false
 var transition_blocked_reason: String = ""
@@ -47,12 +48,25 @@ func get_train_resources() -> TrainResources:
 	return train_resources
 
 
+func set_scenario_coordinator(coordinator: RefCounted) -> void:
+	scenario_coordinator = coordinator
+	if scenario_coordinator != null and scenario_coordinator.has_method("configure_sector") and current_sector != null:
+		scenario_coordinator.configure_sector(current_sector)
+	_link_scavenging_context()
+
+
 func can_depart() -> bool:
 	transition_blocked_reason = ""
+	_prepare_scenario_departure_context()
 	if crew != null and not crew.are_all_survivors_aboard():
 		var unboarded: Array[String] = crew.get_unboarded_survivor_names()
 		transition_blocked_reason = "Departure blocked: Survivor(s) in yard (%s)" % ", ".join(unboarded)
 		return false
+	if scenario_coordinator != null and scenario_coordinator.has_method("get_departure_blocked_reason"):
+		var scenario_reason := str(scenario_coordinator.get_departure_blocked_reason())
+		if scenario_reason != "":
+			transition_blocked_reason = scenario_reason
+			return false
 	if train_resources != null and not train_resources.can_afford(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
 		transition_blocked_reason = "Departure blocked: need %.0f diesel (have %.0f)" % [
 			TrainResources.DEPARTURE_DIESEL_COST,
@@ -112,6 +126,8 @@ func request_transition() -> bool:
 	new_rail.speed = 0.0
 	new_rail.throttle = 0.0
 	new_rail.direction = 1
+	if scenario_coordinator != null and scenario_coordinator.has_method("configure_sector"):
+		scenario_coordinator.configure_sector(new_sector)
 
 	# 4. Dispose old sector instance
 	previous_sector = old_sector
@@ -177,3 +193,12 @@ func _link_scavenging_context() -> void:
 		return
 	if crew.has_method("set_scavenging_context"):
 		crew.set_scavenging_context(current_sector.pois, train_resources)
+
+
+func _prepare_scenario_departure_context() -> void:
+	if scenario_coordinator == null or not scenario_coordinator.has_method("prepare_departure_for_exit"):
+		return
+	var crossed_exit: Dictionary = {}
+	if current_sector != null and current_sector.has_method("get_crossed_exit"):
+		crossed_exit = current_sector.get_crossed_exit()
+	scenario_coordinator.prepare_departure_for_exit(crossed_exit)

@@ -33,13 +33,36 @@ func _init(sec_def: SectorDefinition, rail_model: RefCounted = null, yard_model:
 
 
 func is_exit_crossed() -> bool:
+	return not get_crossed_exit().is_empty()
+
+
+func get_crossed_exit() -> Dictionary:
 	if disposed or definition == null or rail == null:
-		return false
+		return {}
 	if int(rail.direction) <= 0:
-		return false
+		return {}
 	if float(rail.speed) <= 0.05:
-		return false
-	return str(rail.current_segment) == definition.exit_segment and float(rail.distance) >= definition.exit_distance
+		return {}
+
+	for exit_state in _get_effective_route_exits():
+		if str(rail.current_segment) == str(exit_state.get("segment", "")) \
+				and float(rail.distance) >= float(exit_state.get("distance", 0.0)):
+			return exit_state.duplicate(true)
+	return {}
+
+
+func get_route_exit_states() -> Array[Dictionary]:
+	var states: Array[Dictionary] = []
+	if definition == null or rail == null:
+		return states
+	for exit_state in _get_effective_route_exits():
+		var segment_id := str(exit_state.get("segment", ""))
+		var exit_distance := float(exit_state.get("distance", 0.0))
+		var draw_state := exit_state.duplicate(true)
+		draw_state["position"] = rail.get_point_on_segment(segment_id, exit_distance)
+		draw_state["crossed"] = str(rail.current_segment) == segment_id and float(rail.distance) >= exit_distance
+		states.append(draw_state)
+	return states
 
 
 func step(delta: float) -> void:
@@ -77,3 +100,22 @@ func dispose() -> void:
 	rail = null
 	yard = null
 	pois = null
+
+
+func _get_effective_route_exits() -> Array[Dictionary]:
+	var exits: Array[Dictionary] = []
+	if definition == null:
+		return exits
+	for exit_state in definition.route_exits:
+		exits.append(exit_state.duplicate(true))
+	if not exits.is_empty():
+		return exits
+	exits.append({
+		"id": "forward_exit",
+		"route_id": "forward",
+		"label": "Forward exit",
+		"segment": definition.exit_segment,
+		"distance": definition.exit_distance,
+		"profile": "forward",
+	})
+	return exits

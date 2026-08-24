@@ -1,92 +1,104 @@
-# Current Sprint — Sprint 7: Scavenging / Resources
+# Current Sprint — Sprint 8: First Vertical Slice
 
-**Status:** IMPLEMENTED FOR AUTOMATED VALIDATION — HUMAN PLAYTEST PENDING
+**Status:** AUTOMATED IMPLEMENTATION READY — HUMAN PLAYTEST PENDING
 
 ## Hypothesis
-Stopping the train becomes a meaningful strategic decision when useful resources exist outside the train, survivors must physically retrieve them, and time spent stopped has a real colony cost.
+The systems built in Sprints 1-7 become an actual game when they create one understandable chain of problems, decisions and physical consequences.
 
 Core loop to prove:
 
-TRAVEL -> STOP -> SELECT EXPEDITION -> LEAVE TRAIN -> SEARCH POI -> DISCOVER RESOURCE -> PICK UP / CARRY -> RETURN TO TRAIN -> DEPOSIT -> RETURN CREW -> DEPART SECTOR -> SUSTAIN THE TRAIN
+DRIVE -> OBSTRUCTION -> STOP -> EXPEDITION -> SEARCH / RETRIEVE -> RETURN -> ONBOARD RESPONSE -> IRREVERSIBLE DEPARTURE -> INDUSTRIAL YARD -> DISCOVER WORKSHOP WAGON -> SHUNT -> PHYSICAL RECOVERY -> ACTIVATE WORKSHOP -> MAKE DECISION -> DEPART WITH UPGRADED TRAIN
 
 Roadmap acceptance:
-> The player must stop, search, retrieve a required resource, return the team, and depart to sustain the train.
+> A fresh player can complete one meaningful travel -> stop -> explore -> shunt -> upgrade -> depart cycle and understand why the train and its physical configuration matter.
 
-## Baseline Dependency
-Sprint 7 builds on the completed Sprint 6/6B sector lifecycle:
-- sector container and current-sector identity;
-- forward-only entry/exit transition;
-- persistent train and crew transfer;
-- old-sector disposal and no return;
-- deterministic next-sector creation;
-- run journal / transition metadata.
+## Baseline Dependencies
+Sprint 8 builds on the completed Sprint 1-7 systems:
+- deterministic rail-space train movement, points, coupling, uncoupling and contact;
+- persistent rolling-stock identity and explicit powered-unit control;
+- crew as physical agents with aboard/yard state and task execution;
+- carriage interiors and onboard survivor movement;
+- survivor needs, roles, skills and simple task assignment;
+- sector lifecycle with irreversible departure and persistent train transfer;
+- resources, POIs, searching, physical hauling and deposit ownership.
 
-Do not create a second sector lifecycle for scavenging.
+Do not replace these systems with a new mission, quest, train, crew, inventory or sector framework.
 
-## In-Scope Behaviour
-1. Add a train-level stockpile containing `DIESEL`, `FOOD`, and `PARTS`.
-2. Add deterministic sector-local POIs: fuel depot, maintenance shed, and supply store.
-3. Allow a selected survivor to search a POI through the existing physical crew task system.
-4. Searching reveals deterministic loot at the POI but does not add it to the train.
-5. Allow a survivor to physically pick up discovered loot and haul it to the train storage/deposit point.
-6. Deposit transfers ownership into the train stockpile and clears carried cargo.
-7. Sector elapsed time advances while stopped/searching; survivor needs continue updating.
-8. Departing a sector requires and consumes a fixed diesel amount.
-9. Departure is blocked if diesel is insufficient.
-10. Departure is blocked while any expedition survivor is outside the train.
-11. The playable scene exposes resources, POI state, survivor task/cargo state, and departure feedback through the existing side UI and right-click menu pattern.
+## Scenario Structure
+The active build should provide one deterministic first-session slice:
+1. Start with approximately `[L][A][B]`, crew aboard, limited train resources and no workshop wagon.
+2. Drive forward and encounter a clear obstruction/problem.
+3. Stop, send crew physically outside, search local POIs and haul useful supplies back to storage.
+4. Resolve a small onboard maintenance fault through physical crew work.
+5. Depart Sector 0 using the existing irreversible sector lifecycle.
+6. Enter an industrial railway sector containing a separate workshop wagon `W`.
+7. Use real yard operations, points, crew and shunting to physically recover `W`.
+8. Activate `W` through a short crew/work/resource step.
+9. Read the route intel and choose the next route by physically driving onto one of three marked exit branches.
+10. Depart with the upgraded train, preserving the physically coupled workshop wagon.
 
 ## Authority Rules
-- **Train/colony owns stockpiled resources** after deposit.
-- **Sector/world owns POIs, searched state, uncollected loot, and elapsed sector time.**
-- **Crew owns survivor position, tasks, and carried cargo.**
-- **Sprint 6 lifecycle owns departure, old-sector disposal, persistent transfer, and next-sector creation.**
+- **Rail owns** physical movement, topology, rolling stock, consist order, contact, coupling, uncoupling and powered control.
+- **Crew owns** survivor position, movement, tasks and carried cargo.
+- **Train/colony owns** deposited diesel, food, parts, survivor persistent state and carriage interiors.
+- **Sector owns** disposable POIs, obstruction/fault world context and local yard objects.
+- **Sector lifecycle owns** irreversible departure, old-sector disposal and persistent transfer.
+- **Scenario coordinator may observe and author setup** but must not become a competing gameplay authority.
 
-Searching discovers resources. Deposit transfers resources. No code path may add POI loot directly to the train without physical hauling.
+Critical invariants:
+- discovered resource != train-owned resource;
+- crew outside = cannot depart;
+- discovered wagon != owned wagon;
+- owned wagon is not meaningful until physically coupled into the train;
+- workshop coupled != workshop online;
+- final route decision is physical rail state: the train must occupy a marked exit branch, not select a menu option;
+- final consist order must emerge from physical shunting, not UI reordering.
 
 ## Explicit Exclusions
-Do NOT implement in Sprint 7:
-- combat, enemies, weapons, stealth, or random encounters;
-- procedural towns/cities or deep loot tables;
-- detailed inventory, weight, backpacks, or equipment;
-- crafting, recipes, farming, trading, factions, economy;
-- temperature/weather survival;
-- new railway mechanics or multiple independent trains;
-- save/load;
-- final art or audio polish.
+Do NOT implement in Sprint 8:
+- combat, enemies, weapons, stealth or factions;
+- strategic world map or deep recruitment;
+- procedural city/yard overhaul;
+- detailed inventory, encumbrance, crafting, recipes or workshop production queues;
+- technology tree or upgrade tree;
+- signalling/dispatch simulation;
+- multiple independent player trains;
+- major railway physics rewrites;
+- weather survival, save/load, final art, audio production or polished onboarding.
 
 ## Automated Acceptance
-- [x] Resource store supports diesel/food/parts, add, consume, affordability, and non-negative clamping.
-- [x] Active sector exposes deterministic POIs with stable state and one-time search yields.
-- [x] Search requires a valid survivor task and completes only after physical arrival/interact time.
-- [x] Scavenging skill affects search speed without making the Scavenger role mandatory.
-- [x] Search discovers loot without changing train resources.
-- [x] Hauling transfers loot from POI to survivor, then from survivor to train only on deposit.
-- [x] Sector elapsed time and survivor needs advance during stopped expedition time.
-- [x] Insufficient diesel blocks departure.
-- [x] Outside crew blocks departure.
-- [x] Hauled diesel can satisfy departure.
-- [x] Successful departure consumes diesel and preserves Sprint 6 sector disposal/transfer semantics.
-- [x] Existing Sprint 1-6 regression tests must remain green.
+- [x] First-session scenario initialises with the expected train, crew, resources and opening sector problem.
+- [x] Workshop wagon `W` is not initially part of the player's train.
+- [x] Opening obstruction blocks departure/progress until resolved by a physical crew interaction.
+- [x] Sprint 7 scavenging semantics remain intact: search discovers, hauling/deposit transfers ownership.
+- [x] Onboard fault creates valid physical work and clears only after task completion.
+- [x] Sector 0 departure obeys existing diesel/crew/blocker rules and disposes the old sector.
+- [x] Industrial sector loads with a physically separate workshop wagon.
+- [x] Only real endpoint coupling makes `W` part of the train consist.
+- [x] Workshop activation requires the wagon to be attached, consumes the designed resource cost and completes through crew work.
+- [x] Final route branch choice changes real run/next-sector state.
+- [x] Workshop wagon persists across the next sector transition.
+- [x] All Sprint 1-7 regression tests remain green.
+- [x] Headless launch has no parse/compile/runtime script errors.
 
 ## Human Playtest Gate
-Sprint 7 is not complete until the following is verified in the Godot GUI:
-1. Start in Sector 0 with insufficient diesel to depart.
-2. Attempt departure and confirm it is blocked by diesel.
-3. Select Nia or another survivor.
-4. Right-click Fuel Depot and assign Search.
-5. Watch the survivor leave the train and walk to the POI.
-6. Confirm search takes time and reveals diesel at the POI.
-7. Confirm train diesel has not changed yet.
-8. Right-click Fuel Depot and assign Haul.
-9. Watch the survivor carry diesel back to B storage.
-10. Confirm deposit increases train diesel and clears survivor cargo.
-11. Board all outside expedition crew.
-12. Depart the sector and confirm diesel is consumed.
-13. Confirm the persistent train enters the next sector and the old sector is unavailable.
+Sprint 8 is not complete until the following is verified in the Godot GUI:
+1. Drive the starting train.
+2. Encounter the obstruction and stop.
+3. Send crew out physically.
+4. Search/retrieve/deposit useful supplies.
+5. Return crew to the train.
+6. Resolve the onboard fault through physical crew work.
+7. Depart Sector 0 irreversibly.
+8. Enter the industrial sector.
+9. Discover workshop wagon `W` as a physical yard vehicle.
+10. Use yard operations and shunting to physically couple `W`.
+11. Activate the workshop through crew work.
+12. Use route intel and drive onto a marked exit branch to make the final route/resource/recruitment-style decision.
+13. Depart with `W` still attached and persistent.
 
 ## Definition of Done
-Sprint 7 is complete only after automated validation passes and the human playtest gate above is accepted by the user.
+Sprint 8 is complete only after automated validation passes and the human playtest gate above is accepted by the user.
 
 ## Next Possible Increment
-Sprint 8 — first vertical slice.
+Post-vertical-slice features only after Sprint 8 human UAT passes.

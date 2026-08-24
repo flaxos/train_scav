@@ -8,6 +8,8 @@ const SEGMENT_SIDING := "siding"
 const SEGMENT_SIDING_B := "siding_b"
 const SEGMENT_YARD_STORAGE := "yard_storage"
 const SEGMENT_YARD_REPAIR := "yard_repair"
+const SEGMENT_INDUSTRIAL_EXIT := "industrial_exit"
+const SEGMENT_SETTLEMENT_EXIT := "settlement_exit"
 
 const POINTS_MAIN := "main"
 const POINTS_SIDING := "siding"
@@ -93,6 +95,12 @@ const _SEGMENT_POINTS := {
 		Vector2(1590.0, 282.0),
 		Vector2(1640.0, 260.0),
 	],
+	SEGMENT_INDUSTRIAL_EXIT: [
+		Vector2(1640.0, 260.0),
+		Vector2(1740.0, 236.0),
+		Vector2(1880.0, 224.0),
+		Vector2(2020.0, 224.0),
+	],
 	SEGMENT_SIDING: [
 		SWITCH_POSITION,
 		Vector2(620.0, 368.0),
@@ -110,6 +118,12 @@ const _SEGMENT_POINTS := {
 		Vector2(1300.0, 552.0),
 		Vector2(1430.0, 552.0),
 		Vector2(1560.0, 545.0),
+	],
+	SEGMENT_SETTLEMENT_EXIT: [
+		Vector2(1560.0, 545.0),
+		Vector2(1680.0, 548.0),
+		Vector2(1810.0, 570.0),
+		Vector2(1950.0, 570.0),
 	],
 	SEGMENT_YARD_REPAIR: [
 		Vector2(1080.0, 515.0),
@@ -1091,6 +1105,10 @@ func _leave_endpoint_b() -> bool:
 			blocked_reason = "End of workshop siding"
 		SEGMENT_YARD_STORAGE:
 			blocked_reason = "End of storage siding"
+		SEGMENT_INDUSTRIAL_EXIT:
+			blocked_reason = "End of industrial route"
+		SEGMENT_SETTLEMENT_EXIT:
+			blocked_reason = "End of settlement route"
 		SEGMENT_YARD_REPAIR:
 			blocked_reason = "End of repair siding"
 		SEGMENT_SIDING:
@@ -1173,6 +1191,8 @@ func _is_trailing_route_aligned(segment_id: String) -> bool:
 			return get_yard_point_route("P2") == POINTS_SIDING
 		SEGMENT_YARD_STORAGE:
 			return get_yard_point_route("P3") == POINTS_MAIN
+		SEGMENT_INDUSTRIAL_EXIT, SEGMENT_SETTLEMENT_EXIT:
+			return true
 		SEGMENT_YARD_REPAIR:
 			return get_yard_point_route("P3") == POINTS_SIDING
 	return true
@@ -1190,6 +1210,10 @@ func _get_trailing_route_block_reason(segment_id: String) -> String:
 			return "P2 route blocks workshop siding"
 		SEGMENT_YARD_STORAGE:
 			return "P3 route blocks storage siding"
+		SEGMENT_INDUSTRIAL_EXIT:
+			return "Industrial route continuation blocked"
+		SEGMENT_SETTLEMENT_EXIT:
+			return "Settlement route continuation blocked"
 		SEGMENT_YARD_REPAIR:
 			return "P3 route blocks repair siding"
 	return "No route through points"
@@ -1209,6 +1233,10 @@ func _get_previous_segment(segment_id: String) -> String:
 			return SEGMENT_MAIN_EAST
 		SEGMENT_YARD_STORAGE, SEGMENT_YARD_REPAIR:
 			return SEGMENT_SIDING
+		SEGMENT_INDUSTRIAL_EXIT:
+			return SEGMENT_SIDING_B
+		SEGMENT_SETTLEMENT_EXIT:
+			return SEGMENT_YARD_STORAGE
 	return ""
 
 
@@ -1229,6 +1257,10 @@ func _get_next_segment(segment_id: String) -> String:
 			if get_yard_point_route("P3") == POINTS_SIDING:
 				return SEGMENT_YARD_REPAIR
 			return SEGMENT_YARD_STORAGE
+		SEGMENT_SIDING_B:
+			return SEGMENT_INDUSTRIAL_EXIT
+		SEGMENT_YARD_STORAGE:
+			return SEGMENT_SETTLEMENT_EXIT
 	return ""
 
 

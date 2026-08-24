@@ -48,6 +48,8 @@ func _init() -> void:
 	_expect(not _menu_has(scene, "Remote P2"), "normal point context menu does not expose remote switching")
 	_expect(scene.rail.get_yard_point_route(YardOperations.POINT_P2) == route_before, "opening normal P2 menu does not remotely change route")
 
+	_transition_scene_to_industrial(scene)
+
 	var shunter_screen: Vector2 = scene.world_to_screen_position(scene.yard.get_repair_anchor("shunter"))
 	await _right_click(scene, shunter_screen)
 	_expect(_menu_has(scene, "Repair shunter S"), "damaged shunter exposes repair menu action")
@@ -205,6 +207,17 @@ func _configure_shunter_front_contact_fixture(scene: Node) -> void:
 	scene.rail.controlled_power_unit_id = "S"
 	scene.rail.set_powered_unit_condition("S", RailMovement.CONDITION_OPERATIONAL)
 	scene.rail.last_contact.clear()
+
+
+func _transition_scene_to_industrial(scene: Node) -> void:
+	if scene.has_method("get_vertical_slice_state") and scene.scenario != null:
+		scene.scenario.execute_scenario_interaction("clear_obstruction", "opening_obstruction", "olek")
+		scene.scenario.execute_scenario_interaction("repair_onboard_fault", "locomotive_fault", "marta")
+	scene.train_resources.set_amount("diesel", 24.0)
+	_expect(scene.lifecycle.request_transition(), "fixture enters the industrial sector for S/W menu checks")
+	scene.rail = scene.lifecycle.current_sector.rail
+	scene.yard = scene.lifecycle.current_sector.yard
+	scene.interior = scene.crew.interior
 
 
 func _find_unit_state(scene: Node, unit_id: String) -> Dictionary:

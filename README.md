@@ -4,13 +4,13 @@ Top-down 2D Godot train-survival colony prototype.
 
 ## Active Sprint
 
-Sprint 7: Scavenging / Resources — automated validation implemented; HUMAN PLAYTEST PENDING.
+Sprint 8: First Vertical Slice — automated implementation ready; HUMAN PLAYTEST PENDING.
 
-Sprint 7 proves the first physical scavenging loop on top of the completed Sprint 6 sector lifecycle. The train starts short on diesel, so departure should fail until a survivor physically searches the Fuel Depot, discovers diesel, hauls it back to B storage, boards again and then departs.
+Sprint 8 composes the existing train, crew, sector lifecycle, scavenging, yard operations and resource systems into one authored first-session slice: drive, stop at an obstruction, send crew out, recover supplies, repair an onboard fault, depart irreversibly, recover workshop wagon `W`, activate it, choose the next route by physically driving onto a marked exit branch and leave with the upgraded train.
 
 The UAT scene keeps state/debug text in a right-side panel rather than over the railway playfield. Normal object operations are mouse-first: right-click the intended ground/object/anchor/POI, then left-click a menu option to confirm. POIs use programmer-art icons and labels: Fuel Depot, Maintenance Shed and Supply Store.
 
-The playable scene includes an in-game Sprint 7 UAT guide in the side panel. Follow the checklist top to bottom while testing the demo slice. Interaction anchors still use simple prototype icons for points, repairs, power and couplers; local scavenging targets are separate sector POIs.
+The playable scene includes an in-game Sprint 8 UAT guide in the side panel. Follow the checklist top to bottom while testing the demo slice. Interaction anchors still use simple prototype icons for points, repairs, power and couplers; local scavenging targets are separate sector POIs.
 
 Sector lifecycle note: after all survivors are aboard and the train has enough diesel, drive east past P2 onto the visible main-exit track. The scene hard-brakes and asks for confirmation before disposing the sector, including diesel cost, detached rolling stock and uncollected POI supplies. Choosing No stops before the boundary and keeps the current sector; choosing Yes consumes diesel, disposes Sector 0 and enters Sector 1.
 
@@ -39,7 +39,7 @@ Controls:
 - `C`: optional shortcut to assign crew coupling for the current contacted compatible endpoints at low speed
 - Developer/debug shortcuts: `D` leave train, `B` board, `P/O` local point tasks, `U` exact A/B uncouple, `G/H/J/K` repair/power tasks, `Y/T` rejected remote point attempts, `X` crew-gated powered control, `E` crew P1 operation, `Q/F` guidance to use the exact right-click joint menu
 
-For Sprint 7 UAT, first try to depart with the starting diesel shortage, then send Nia or another survivor to search and haul fuel. The debug panel reports sector time, train stockpile, rail state, explicit powered control, driver availability and selected survivor/task/cargo state.
+For Sprint 8 UAT, start by driving to the obstruction and confirming the route is blocked. Clear it with crew, search and haul fuel/parts, resolve the onboard fault, depart to the industrial sector, physically couple `W`, activate it with parts, use the map/route labels to pick a branch, then drive onto that branch and depart again. The debug panel reports sector time, objective, train stockpile, rail state, explicit powered control, driver availability and selected survivor/task/cargo state.
 
 ## Verified Local Toolchain
 

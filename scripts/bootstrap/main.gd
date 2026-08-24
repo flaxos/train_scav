@@ -9,6 +9,7 @@ const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
 const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const SectorLifecycle := preload("res://scripts/sector/sector_lifecycle.gd")
 const TrainResources := preload("res://scripts/train/train_resources.gd")
+const FirstRunScenario := preload("res://scripts/run/first_run_scenario.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -48,6 +49,10 @@ const POI_FUEL_COLOR := Color(0.92, 0.54, 0.22, 1.0)
 const POI_PARTS_COLOR := Color(0.58, 0.70, 0.86, 1.0)
 const POI_FOOD_COLOR := Color(0.44, 0.78, 0.42, 1.0)
 const CARGO_COLOR := Color(0.98, 0.82, 0.24, 1.0)
+const OBSTRUCTION_COLOR := Color(0.78, 0.36, 0.22, 1.0)
+const FAULT_COLOR := Color(0.95, 0.42, 0.28, 1.0)
+const WORKSHOP_ONLINE_COLOR := Color(0.42, 0.95, 0.72, 1.0)
+const ROUTE_DECISION_COLOR := Color(0.72, 0.68, 0.98, 1.0)
 const PANEL_BACKGROUND_COLOR := Color(0.075, 0.083, 0.095, 1.0)
 const PANEL_BORDER_COLOR := Color(0.23, 0.25, 0.28, 1.0)
 const PANEL_SECTION_COLOR := Color(0.105, 0.115, 0.13, 1.0)
@@ -88,6 +93,7 @@ var interior: TrainInterior
 var task_broker: RefCounted
 var lifecycle: RefCounted
 var train_resources: TrainResources
+var scenario: FirstRunScenario
 var _throttle_up_held: bool = false
 var _throttle_down_held: bool = false
 var _brake_held: bool = false
@@ -112,9 +118,12 @@ func _ready() -> void:
 	task_broker = TaskBroker.new(crew, yard, rail)
 	lifecycle = SectorLifecycle.new(12345, crew, task_broker)
 	train_resources = lifecycle.get_train_resources()
-	train_resources.set_amount(TrainResources.RESOURCE_DIESEL, 6.0)
+	train_resources.set_amount(TrainResources.RESOURCE_DIESEL, 12.0)
 	train_resources.set_amount(TrainResources.RESOURCE_FOOD, 12.0)
 	train_resources.set_amount(TrainResources.RESOURCE_PARTS, 0.0)
+	scenario = FirstRunScenario.new()
+	scenario.attach(lifecycle, crew, task_broker)
+	lifecycle.set_scenario_coordinator(scenario)
 	_refresh_side_panel_text(true)
 	_layout_ui()
 	queue_redraw()
@@ -175,6 +184,15 @@ func get_compact_debug_lines() -> Array[String]:
 			train_resources.get_amount(TrainResources.RESOURCE_PARTS),
 		]
 	lines.append("Sector: %s  Time: %.0fs  Stock: %s  Auto: %s" % [sec_name, elapsed_time, stock, auto_label])
+	if scenario != null:
+		var objective := _get_current_objective_text()
+		var departure_blocker := _get_departure_blocker_text()
+		if departure_blocker != "":
+			objective = "%s  Exit blocked: %s" % [objective, _short_departure_blocker(departure_blocker)]
+		lines.append("Objective: %s" % objective)
+		var workshop_visual := get_workshop_visual_state()
+		if not workshop_visual.is_empty():
+			lines.append("Workshop W: %s" % str(workshop_visual.get("status", "")))
 	var controlled_power := rail.get_controlled_power_unit_id()
 	lines.append("Consist: %s  Control: %s (%s)" % [
 		rail.get_consist_summary(),
@@ -193,14 +211,17 @@ func get_compact_debug_lines() -> Array[String]:
 		str(p2.get("route", "")),
 		str(p3.get("route", "")),
 	])
-	lines.append("Yard: control %s  power %s  remote %s" % [
+	var shunter_status := "not in sector"
+	var shunter_controllable := "no"
+	if _sector_has_unit("S"):
+		shunter_status = str(shunter.get("condition", ""))
+		shunter_controllable = _yes_no(bool(shunter.get("controllable", false)))
+	lines.append("Yard: control %s power %s remote %s  S:%s/%s" % [
 		str(yard_control.get("condition", "")),
 		_on_off(bool(yard_control.get("powered", false))),
 		_yes_no(bool(yard_control.get("remote_control", false))),
-	])
-	lines.append("Shunter S: %s  selectable %s" % [
-		str(shunter.get("condition", "")),
-		_yes_no(bool(shunter.get("controllable", false))),
+		shunter_status,
+		shunter_controllable,
 	])
 
 	if selected.is_empty():
@@ -263,6 +284,51 @@ func get_sector_visual_state() -> Dictionary:
 		"entry_distance": def.entry_distance,
 		"exit_segment": def.exit_segment,
 		"exit_distance": def.exit_distance,
+		"route_exits": def.route_exits.duplicate(true),
+	}
+
+
+func get_sector_exit_draw_states() -> Array[Dictionary]:
+	if lifecycle == null or lifecycle.current_sector == null:
+		return []
+	if lifecycle.current_sector.has_method("get_route_exit_states"):
+		return lifecycle.current_sector.get_route_exit_states()
+	return []
+
+
+func get_workshop_visual_state() -> Dictionary:
+	if scenario == null:
+		return {}
+	var state: Dictionary = scenario.get_state()
+	if str(state.get("phase", "")) != FirstRunScenario.PHASE_INDUSTRIAL:
+		return {}
+	var recovered := bool(state.get("workshop_recovered", false))
+	var online := bool(state.get("workshop_online", false))
+	var status := "not recovered"
+	if recovered:
+		status = "online" if online else "offline"
+		if not online:
+			var cost := FirstRunScenario.WORKSHOP_ACTIVATION_PARTS_COST
+			var available := 0.0
+			if train_resources != null:
+				available = train_resources.get_amount(TrainResources.RESOURCE_PARTS)
+			status = "offline - needs %.0f parts (have %.0f)" % [cost, available]
+	var label := "W WORKSHOP"
+	if online:
+		label = "W WORKSHOP ONLINE"
+	elif recovered:
+		label = "W WORKSHOP OFFLINE"
+	var unit_state := _get_unit_draw_state(FirstRunScenario.WORKSHOP_ID)
+	var position := Vector2.ZERO
+	if not unit_state.is_empty():
+		position = unit_state.get("position", Vector2.ZERO) as Vector2
+	return {
+		"id": FirstRunScenario.WORKSHOP_ID,
+		"recovered": recovered,
+		"online": online,
+		"status": status,
+		"label": label,
+		"position": position,
 	}
 
 
@@ -272,6 +338,18 @@ func get_train_resource_state() -> Dictionary:
 	var state: Dictionary = train_resources.get_all()
 	state["departure_cost"] = TrainResources.DEPARTURE_DIESEL_COST
 	return state
+
+
+func get_vertical_slice_state() -> Dictionary:
+	if scenario == null:
+		return {}
+	return scenario.get_state()
+
+
+func get_scenario_draw_states() -> Array[Dictionary]:
+	if scenario == null:
+		return []
+	return scenario.get_world_interaction_states()
 
 
 func get_ui_panel_refresh_count() -> int:
@@ -365,6 +443,8 @@ func cancel_sector_departure() -> bool:
 		return false
 	departure_confirmation_open = false
 	departure_confirmation_lines.clear()
+	if scenario != null and scenario.has_method("clear_pending_route_selection"):
+		scenario.clear_pending_route_selection()
 	_hard_brake_before_exit(true)
 	if yard != null:
 		yard.last_status = "Departure cancelled - train stopped before sector exit"
@@ -406,6 +486,8 @@ func get_anchor_icon_states() -> Array[Dictionary]:
 	for state in crew.get_interaction_draw_states():
 		var anchor_id := str(state.get("id", ""))
 		var anchor_type := str(state.get("type", ""))
+		if anchor_id == "shunter" and not _sector_has_unit("S"):
+			continue
 		states.append({
 			"id": anchor_id,
 			"type": anchor_type,
@@ -580,17 +662,19 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 7 UAT Guide",
-		"Goal: scavenge diesel, return crew, depart.",
+		"Train Scav - Sprint 8 UAT Guide",
+		"Goal: complete the first vertical slice.",
 		"Mouse-first operations",
 		"Left click survivor: select",
-		"Right click POI/train: options",
+		"Right click object/train/POI: options",
 		"Left click menu item: confirm",
 		"Drive remains keyboard: W/S Space R",
-		"Start diesel is short: departure should fail.",
-		"Search discovers loot; hauling deposits it.",
-		"Departure requires all crew aboard.",
-		"S starts damaged; repair before control.",
+		"Discover != owned; haul supplies to B.",
+		"Coupled W != online; activate it.",
+		"Final route: drive onto a marked exit branch.",
+		"Shunter S appears in Sector 1 after first departure.",
+		"Departure requires all crew aboard and diesel.",
+		"Departure blockers show in Objective/Status.",
 	]
 	var steps := _get_uat_step_states()
 	var current_step := get_current_uat_step_index()
@@ -632,6 +716,11 @@ func _process(delta: float) -> void:
 
 	if not departure_confirmation_open:
 		rail.step(delta, _brake_held)
+		if scenario != null and scenario.apply_movement_constraints(rail):
+			_throttle_up_held = false
+			_throttle_down_held = false
+			if yard != null:
+				yard.last_status = str(scenario.last_status)
 	if lifecycle != null and lifecycle.current_sector != null and not lifecycle.current_sector.disposed:
 		lifecycle.current_sector.step(delta)
 	if report_missing_driver:
@@ -783,6 +872,7 @@ func _draw() -> void:
 	_draw_yard_auxiliary_tracks()
 	_draw_switch()
 	_draw_sector_pois()
+	_draw_scenario_objects()
 	_draw_coupling_zones()
 	_draw_rolling_stock()
 	_draw_train_interiors()
@@ -799,11 +889,29 @@ func _draw() -> void:
 func _draw_sector_exit() -> void:
 	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
 		return
-	var def: SectorDefinition = lifecycle.current_sector.definition
-	var exit_pos: Vector2 = rail.get_point_on_segment(def.exit_segment, def.exit_distance)
+	var exits := get_sector_exit_draw_states()
+	if exits.is_empty():
+		var def: SectorDefinition = lifecycle.current_sector.definition
+		exits.append({
+			"label": "Exit boundary",
+			"position": rail.get_point_on_segment(def.exit_segment, def.exit_distance),
+		})
 	var exit_color := Color(0.95, 0.35, 0.35, 0.9) if lifecycle.transition_blocked_reason != "" else Color(0.35, 0.95, 0.85, 0.9)
-	draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), exit_color, 4.0)
-	draw_string(get_theme_default_font(), exit_pos + Vector2(-36.0, -38.0), "EXIT BOUNDARY", HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, exit_color)
+	for exit_state in exits:
+		var exit_pos := exit_state.get("position", Vector2.ZERO) as Vector2
+		var route_id := str(exit_state.get("route_id", exit_state.get("id", "")))
+		var label := str(exit_state.get("label", "Exit boundary"))
+		if route_id == "forward":
+			label = "EXIT BOUNDARY"
+		var color := exit_color
+		if route_id == "industrial":
+			color = Color(0.96, 0.67, 0.24, 0.95)
+		elif route_id == "settlement":
+			color = Color(0.42, 0.78, 0.48, 0.95)
+		elif route_id == "direct":
+			color = Color(0.65, 0.72, 0.82, 0.95)
+		draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), color, 4.0)
+		draw_string(get_theme_default_font(), exit_pos + Vector2(-44.0, -38.0), label.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, color)
 
 
 func _draw_sector_entry() -> void:
@@ -1257,6 +1365,8 @@ func _draw_unit(state: Dictionary) -> void:
 	draw_polyline(outline, Color(0.08, 0.08, 0.08, 1.0), 2.5, true)
 	if str(state["type"]) == RailMovement.UNIT_LOCOMOTIVE or str(state["type"]) == RailMovement.UNIT_SHUNTER:
 		_draw_locomotive_indicator(state)
+	if str(state["type"]) == RailMovement.UNIT_WORKSHOP and _is_workshop_online():
+		_draw_workshop_online_indicator(state)
 	_draw_unit_label(state)
 
 
@@ -1278,6 +1388,31 @@ func _draw_locomotive_indicator(state: Dictionary) -> void:
 
 	draw_colored_polygon(cab, LOCOMOTIVE_CAB_COLOR)
 	draw_circle(ends["front"], 6.5, LOCOMOTIVE_HEADLIGHT_COLOR)
+
+
+func _draw_workshop_online_indicator(state: Dictionary) -> void:
+	var pos := state["position"] as Vector2
+	var angle := float(state["angle"])
+	var tangent := Vector2.RIGHT.rotated(angle)
+	var normal := Vector2.UP.rotated(angle)
+	var length := float(state["length"])
+	var half_length := maxf(length * 0.5 - 5.0, 8.0)
+	var half_width := 17.0
+	var panel := PackedVector2Array([
+		pos - tangent * half_length - normal * half_width,
+		pos + tangent * half_length - normal * half_width,
+		pos + tangent * half_length + normal * half_width,
+		pos - tangent * half_length + normal * half_width,
+		pos - tangent * half_length - normal * half_width,
+	])
+	draw_polyline(panel, WORKSHOP_ONLINE_COLOR, 3.0, true)
+	draw_circle(pos + normal * 1.0, 7.0, WORKSHOP_ONLINE_COLOR)
+	draw_circle(pos + normal * 1.0, 3.2, ICON_BACKGROUND_COLOR)
+
+	var font := get_theme_default_font()
+	if font != null:
+		var label_pos := pos + normal * 36.0 - tangent * 28.0
+		draw_string(font, label_pos, "ONLINE", HORIZONTAL_ALIGNMENT_LEFT, 80.0, 11, WORKSHOP_ONLINE_COLOR)
 
 
 func _draw_unit_label(state: Dictionary) -> void:
@@ -1331,6 +1466,53 @@ func _draw_poi_icon(position: Vector2, icon: String, color: Color, searched: boo
 			draw_line(position + Vector2(8.0, 6.0), position + Vector2(0.0, -8.0), color, 2.0, true)
 	if searched:
 		draw_line(position + Vector2(-11.0, 11.0), position + Vector2(11.0, -11.0), Color(1.0, 1.0, 1.0, 0.55), 2.0, true)
+
+
+func _draw_scenario_objects() -> void:
+	var font := get_theme_default_font()
+	for state in get_scenario_draw_states():
+		var target_id := str(state.get("id", ""))
+		var position := state.get("position", Vector2.ZERO) as Vector2
+		var label := str(state.get("label", target_id))
+		match target_id:
+			FirstRunScenario.OBSTRUCTION_ID:
+				_draw_obstruction_marker(position)
+			FirstRunScenario.ONBOARD_FAULT_ID:
+				_draw_fault_marker(position)
+			FirstRunScenario.WORKSHOP_ACTIVATION_ID:
+				_draw_workshop_marker(position)
+			FirstRunScenario.ROUTE_DECISION_ID:
+				_draw_route_decision_marker(position)
+			_:
+				draw_circle(position, 10.0, ROUTE_DECISION_COLOR)
+		if font != null:
+			draw_string(font, position + Vector2(18.0, -12.0), label, HORIZONTAL_ALIGNMENT_LEFT, 190.0, 12, ICON_LABEL_COLOR)
+
+
+func _draw_obstruction_marker(position: Vector2) -> void:
+	draw_rect(Rect2(position - Vector2(17.0, 10.0), Vector2(34.0, 13.0)), OBSTRUCTION_COLOR, true)
+	draw_line(position + Vector2(-19.0, 11.0), position + Vector2(-6.0, -10.0), OBSTRUCTION_COLOR.lightened(0.2), 4.0, true)
+	draw_line(position + Vector2(3.0, 10.0), position + Vector2(17.0, -9.0), OBSTRUCTION_COLOR.lightened(0.15), 4.0, true)
+	draw_arc(position, 22.0, 0.0, TAU, 28, ICON_STROKE_COLOR, 2.0)
+
+
+func _draw_fault_marker(position: Vector2) -> void:
+	draw_circle(position, 11.0, FAULT_COLOR)
+	draw_line(position + Vector2(-5.0, -7.0), position + Vector2(6.0, 4.0), ICON_BACKGROUND_COLOR, 3.0, true)
+	draw_line(position + Vector2(5.0, -7.0), position + Vector2(-6.0, 5.0), ICON_BACKGROUND_COLOR, 3.0, true)
+
+
+func _draw_workshop_marker(position: Vector2) -> void:
+	draw_circle(position, 13.0, ICON_BACKGROUND_COLOR)
+	draw_arc(position, 14.0, 0.0, TAU, 28, WORKSHOP_ONLINE_COLOR, 2.0)
+	_draw_repair_anchor_icon(position, WORKSHOP_ONLINE_COLOR)
+
+
+func _draw_route_decision_marker(position: Vector2) -> void:
+	draw_rect(Rect2(position - Vector2(18.0, 14.0), Vector2(36.0, 28.0)), ROUTE_LABEL_BACKGROUND_COLOR, true)
+	draw_rect(Rect2(position - Vector2(18.0, 14.0), Vector2(36.0, 28.0)), ROUTE_DECISION_COLOR, false, 2.0)
+	draw_line(position + Vector2(-9.0, -4.0), position + Vector2(9.0, -4.0), ROUTE_DECISION_COLOR, 2.0, true)
+	draw_line(position + Vector2(-9.0, 4.0), position + Vector2(5.0, 4.0), ROUTE_DECISION_COLOR, 2.0, true)
 
 
 func _draw_crew_interaction_anchors() -> void:
@@ -1531,7 +1713,17 @@ func _get_track_color(segment_id: String) -> Color:
 		return ROUTE_SIDING_COLOR
 	if segment_id == RailMovement.SEGMENT_SIDING_B and rail.get_yard_point_route(YardOperations.POINT_P2) == RailMovement.POINTS_SIDING:
 		return ROUTE_SIDING_COLOR
+	if segment_id == RailMovement.SEGMENT_INDUSTRIAL_EXIT:
+		return Color(0.96, 0.67, 0.24, 0.92)
+	if segment_id == RailMovement.SEGMENT_SETTLEMENT_EXIT:
+		return Color(0.42, 0.78, 0.48, 0.92)
 	return ROUTE_INACTIVE_COLOR
+
+
+func _is_workshop_online() -> bool:
+	if scenario == null:
+		return false
+	return bool(scenario.get_state().get("workshop_online", false))
 
 
 func _route_kind_from_route(route: String) -> String:
@@ -1577,45 +1769,128 @@ func _refresh_instruction_text() -> void:
 
 func _get_uat_step_states() -> Array[Dictionary]:
 	var fuel: Dictionary = get_sector_poi_state("fuel_depot")
+	var parts: Dictionary = get_sector_poi_state("maintenance_shed")
 	var fuel_searched := bool(fuel.get("searched", false))
 	var fuel_available := float(fuel.get("available_amount", 0.0))
+	var parts_available := float(parts.get("available_amount", 0.0))
 	var diesel_amount := 0.0
+	var parts_amount := 0.0
 	if train_resources != null:
 		diesel_amount = train_resources.get_amount(TrainResources.RESOURCE_DIESEL)
+		parts_amount = train_resources.get_amount(TrainResources.RESOURCE_PARTS)
+	var scenario_state: Dictionary = get_vertical_slice_state()
 	return [
 		{
-			"label": "Attempt exit: blocked by diesel",
-			"done": lifecycle != null and str(lifecycle.transition_blocked_reason).contains("diesel"),
+			"label": "Drive to obstruction and stop",
+			"done": (lifecycle != null and str(lifecycle.transition_blocked_reason).contains("obstruction")) \
+					or (rail != null and str(rail.blocked_reason).contains("obstruction")),
 		},
 		{
-			"label": "Select Nia or another survivor",
-			"done": survivor_selection_confirmed,
+			"label": "Select crew and clear obstruction",
+			"done": not bool(scenario_state.get("obstruction_active", true)),
 		},
 		{
-			"label": "Right click Fuel Depot -> Search",
-			"done": fuel_searched,
+			"label": "Search fuel + parts POIs",
+			"done": fuel_searched and bool(parts.get("searched", false)),
 		},
 		{
-			"label": "Diesel discovered, not in train yet",
-			"done": fuel_available > 0.0 and diesel_amount < TrainResources.DEPARTURE_DIESEL_COST,
+			"label": "Haul diesel and parts to B storage",
+			"done": diesel_amount > 12.0 \
+					and parts_amount >= FirstRunScenario.WORKSHOP_ACTIVATION_PARTS_COST \
+					and fuel_available <= 0.0 \
+					and parts_available <= 0.0,
 		},
 		{
-			"label": "Right click Fuel Depot -> Haul diesel",
-			"done": diesel_amount >= 14.0 or fuel_available <= 0.0 and fuel_searched,
+			"label": "Repair onboard locomotive fault",
+			"done": not bool(scenario_state.get("onboard_fault_active", true)),
 		},
 		{
-			"label": "Deposit at B storage",
-			"done": diesel_amount >= 14.0,
-		},
-		{
-			"label": "Board all outside crew",
-			"done": crew.are_all_survivors_aboard(),
-		},
-		{
-			"label": "Depart to next sector",
+			"label": "Board all crew and depart Sector 0",
 			"done": lifecycle != null and lifecycle.run_state.sector_index > 0,
 		},
+		{
+			"label": "In industrial yard, recover W by coupling",
+			"done": bool(scenario_state.get("workshop_recovered", false)),
+		},
+		{
+			"label": "Activate workshop W with crew + parts",
+			"done": bool(scenario_state.get("workshop_online", false)),
+		},
+		{
+			"label": "Drive onto a marked route exit branch",
+			"done": str(scenario_state.get("selected_route", "")) != "",
+		},
+		{
+			"label": "Depart with upgraded train",
+			"done": lifecycle != null and lifecycle.run_state.sector_index > 1,
+		},
+		{
+			"label": "Selected survivor visible",
+			"done": survivor_selection_confirmed,
+		},
 	]
+
+
+func _get_current_objective_text() -> String:
+	var state: Dictionary = get_vertical_slice_state()
+	if state.is_empty():
+		return "Drive and inspect the sector"
+	var phase := str(state.get("phase", ""))
+	if phase == FirstRunScenario.PHASE_OPENING:
+		if bool(state.get("obstruction_active", false)):
+			return "Stop and clear the track obstruction"
+		var fuel: Dictionary = get_sector_poi_state("fuel_depot")
+		var parts: Dictionary = get_sector_poi_state("maintenance_shed")
+		var diesel_amount := train_resources.get_amount(TrainResources.RESOURCE_DIESEL) if train_resources != null else 0.0
+		var parts_amount := train_resources.get_amount(TrainResources.RESOURCE_PARTS) if train_resources != null else 0.0
+		if not bool(fuel.get("searched", false)) or not bool(parts.get("searched", false)):
+			return "Search fuel and parts POIs"
+		if diesel_amount <= 12.0:
+			return "Haul discovered supplies back to B"
+		if parts_amount < FirstRunScenario.WORKSHOP_ACTIVATION_PARTS_COST:
+			return "Haul parts for workshop W (need %.0f, have %.0f)" % [
+				FirstRunScenario.WORKSHOP_ACTIVATION_PARTS_COST,
+				parts_amount,
+			]
+		if bool(state.get("onboard_fault_active", false)):
+			return "Repair the onboard locomotive fault"
+		if not crew.are_all_survivors_aboard():
+			return "Board every expedition survivor"
+		return "Depart irreversibly to the industrial sector"
+	if phase == FirstRunScenario.PHASE_INDUSTRIAL:
+		if not bool(state.get("workshop_recovered", false)):
+			return "Recover workshop wagon W by physical coupling"
+		if not bool(state.get("workshop_online", false)):
+			return "Activate workshop W with crew and parts"
+		if str(state.get("selected_route", "")) == "":
+			return "Drive onto a marked route exit branch"
+		return "Depart with W attached and online"
+	return "Continue on the chosen route"
+
+
+func _get_departure_blocker_text() -> String:
+	if lifecycle == null:
+		return ""
+	if crew != null and not crew.are_all_survivors_aboard():
+		var unboarded: Array[String] = crew.get_unboarded_survivor_names()
+		return "Departure blocked: Survivor(s) in yard (%s)" % ", ".join(unboarded)
+	if scenario != null and scenario.has_method("get_departure_blocked_reason"):
+		var scenario_reason := str(scenario.get_departure_blocked_reason())
+		if scenario_reason != "":
+			return scenario_reason
+	if train_resources != null and not train_resources.can_afford(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
+		return "Departure blocked: need %.0f diesel (have %.0f)" % [
+			TrainResources.DEPARTURE_DIESEL_COST,
+			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+		]
+	return ""
+
+
+func _short_departure_blocker(reason: String) -> String:
+	var prefix := "Departure blocked: "
+	if reason.begins_with(prefix):
+		return reason.substr(prefix.length())
+	return reason
 
 
 func _get_anchor_icon_kind(anchor_type: String) -> String:
@@ -1736,6 +2011,7 @@ func _build_context_menu_items(world_position: Vector2) -> Array[Dictionary]:
 	_add_interior_context_items(items, world_position)
 	_add_joint_context_items(items, world_position)
 	_add_coupling_context_item(items, world_position)
+	_add_scenario_context_items(items, world_position)
 	_add_poi_context_items(items, world_position)
 	if _get_unit_id_near_world_position(world_position) == "" and _get_poi_id_near_world_position(world_position) == "":
 		_add_context_item(items, "Move %s here" % _get_selected_survivor_name(), "move", {
@@ -1789,12 +2065,13 @@ func _add_infrastructure_context_items(items: Array[Dictionary], world_position:
 
 
 func _add_shunter_context_items(items: Array[Dictionary], world_position: Vector2) -> void:
+	var shunter_state := _get_unit_draw_state("S")
+	if shunter_state.is_empty():
+		return
 	var shunter_anchor := yard.get_repair_anchor("shunter")
 	var near_shunter_anchor := world_position.distance_to(shunter_anchor) <= CONTEXT_TARGET_RADIUS
-	var shunter_state := _get_unit_draw_state("S")
 	var near_shunter_unit := false
-	if not shunter_state.is_empty():
-		near_shunter_unit = world_position.distance_to(shunter_state.get("position", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS
+	near_shunter_unit = world_position.distance_to(shunter_state.get("position", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS
 	if not near_shunter_anchor and not near_shunter_unit:
 		return
 
@@ -1938,6 +2215,44 @@ func _add_poi_context_items(items: Array[Dictionary], world_position: Vector2) -
 		})
 
 
+func _add_scenario_context_items(items: Array[Dictionary], world_position: Vector2) -> void:
+	if scenario == null:
+		return
+	for state in scenario.get_world_interaction_states():
+		var position := state.get("position", Vector2.ZERO) as Vector2
+		if world_position.distance_to(position) > CONTEXT_TARGET_RADIUS:
+			continue
+		var target_id := str(state.get("id", ""))
+		if target_id == FirstRunScenario.ROUTE_DECISION_ID:
+			continue
+
+		var action_id := str(state.get("action_id", ""))
+		_add_context_item(items, _get_scenario_context_label(state), "scenario_interaction", {
+			"action_id": action_id,
+			"target_id": target_id,
+			"target_position": position,
+			"target_label": str(state.get("label", target_id)),
+			"duration": float(state.get("duration", 0.0)),
+			"host_unit": str(state.get("host_unit", "")),
+			"local_offset": state.get("local_offset", Vector2.ZERO),
+		})
+
+
+func _get_scenario_context_label(state: Dictionary) -> String:
+	var label := str(state.get("label", state.get("id", "")))
+	var action_id := str(state.get("action_id", ""))
+	if action_id != FirstRunScenario.ACTION_ACTIVATE_WORKSHOP:
+		return label
+
+	var cost := float(state.get("parts_cost", FirstRunScenario.WORKSHOP_ACTIVATION_PARTS_COST))
+	var available := 0.0
+	if train_resources != null:
+		available = train_resources.get_amount(TrainResources.RESOURCE_PARTS)
+	if available < cost:
+		return "%s (need %.0f parts; have %.0f)" % [label, cost, available]
+	return "%s (uses %.0f parts; have %.0f)" % [label, cost, available]
+
+
 func _add_context_item(items: Array[Dictionary], label: String, action: String, data: Dictionary) -> void:
 	for item in items:
 		if str(item.get("label", "")) == label:
@@ -1993,6 +2308,46 @@ func _execute_context_action(item: Dictionary) -> void:
 			crew.assign_search_poi(selected_id, str(item.get("poi_id", "")))
 		"haul_poi":
 			crew.assign_haul_poi_resource(selected_id, str(item.get("poi_id", "")))
+		"scenario_interaction":
+			var assigned := crew.assign_scenario_interaction(
+				selected_id,
+				str(item.get("action_id", "")),
+				str(item.get("target_id", "")),
+				item.get("target_position", Vector2.ZERO) as Vector2,
+				str(item.get("target_label", "")),
+				float(item.get("duration", 0.0)),
+				{},
+				str(item.get("host_unit", "")),
+				item.get("local_offset", Vector2.ZERO) as Vector2
+			)
+			if assigned:
+				yard.last_status = "Assigned %s: %s" % [
+					_get_context_actor_name(selected_id),
+					str(item.get("target_label", "scenario task")),
+				]
+			else:
+				yard.last_status = _get_context_assignment_failure_status(selected_id, item)
+
+
+func _get_context_actor_name(survivor_id: String) -> String:
+	var actor_state := crew.get_survivor_state(survivor_id)
+	if actor_state.is_empty():
+		return "crew"
+	return str(actor_state.get("name", "crew"))
+
+
+func _get_context_assignment_failure_status(survivor_id: String, item: Dictionary) -> String:
+	var label := str(item.get("target_label", item.get("label", "task")))
+	if survivor_id == "":
+		return "Select a survivor before assigning %s" % label
+
+	var selected := crew.get_survivor_state(survivor_id)
+	var selected_status := str(selected.get("status_text", ""))
+	if selected_status != "" and selected_status != "Idle":
+		return selected_status
+	if scenario != null and scenario.last_status != "":
+		return str(scenario.last_status)
+	return "Could not assign %s" % label
 
 
 func _get_context_menu_rect() -> Rect2:
@@ -2074,6 +2429,13 @@ func _describe_context_target(world_position: Vector2, clicked_survivor_id: Stri
 		var poi: Dictionary = get_sector_poi_state(poi_id)
 		return str(poi.get("name", poi_id))
 
+	var scenario_target := _get_scenario_target_near_world_position(world_position)
+	if scenario_target != "":
+		for state in get_scenario_draw_states():
+			if str(state.get("id", "")) == scenario_target:
+				return str(state.get("label", scenario_target))
+		return scenario_target
+
 	var yard_control := yard.get_yard_control_state()
 	if world_position.distance_to(yard_control.get("repair_anchor", Vector2.ZERO) as Vector2) <= CONTEXT_TARGET_RADIUS:
 		return "Yard control"
@@ -2112,6 +2474,12 @@ func _get_unit_draw_state(unit_id: String) -> Dictionary:
 	return {}
 
 
+func _sector_has_unit(unit_id: String) -> bool:
+	if rail == null:
+		return false
+	return not _get_unit_draw_state(unit_id).is_empty()
+
+
 func _get_unit_local_position_for_world(unit_id: String, world_position: Vector2) -> Vector2:
 	var state := _get_unit_draw_state(unit_id)
 	if state.is_empty():
@@ -2137,6 +2505,19 @@ func _get_poi_id_near_world_position(world_position: Vector2) -> String:
 	var nearest_id := ""
 	var nearest_distance := CONTEXT_TARGET_RADIUS
 	for state in get_sector_poi_states():
+		var position := state.get("position", Vector2.ZERO) as Vector2
+		var distance := world_position.distance_to(position)
+		if distance >= nearest_distance:
+			continue
+		nearest_distance = distance
+		nearest_id = str(state.get("id", ""))
+	return nearest_id
+
+
+func _get_scenario_target_near_world_position(world_position: Vector2) -> String:
+	var nearest_id := ""
+	var nearest_distance := CONTEXT_TARGET_RADIUS
+	for state in get_scenario_draw_states():
 		var position := state.get("position", Vector2.ZERO) as Vector2
 		var distance := world_position.distance_to(position)
 		if distance >= nearest_distance:
@@ -2205,6 +2586,9 @@ func _build_departure_confirmation_lines() -> Array[String]:
 			TrainResources.DEPARTURE_DIESEL_COST,
 			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
 		])
+	var selected_route_label := _get_selected_route_label()
+	if selected_route_label != "":
+		lines.append("Route branch: %s" % selected_route_label)
 	lines.append("Departing consist: %s" % rail.get_consist_summary())
 	lines.append("Rolling stock left behind: %s" % rail.get_detached_summary())
 	lines.append("Uncollected POI supplies are abandoned with this sector.")
@@ -2226,10 +2610,26 @@ func _hard_brake_before_exit(clamp_before_boundary: bool) -> void:
 	if lifecycle == null or lifecycle.current_sector == null or lifecycle.current_sector.definition == null:
 		return
 
-	var def: SectorDefinition = lifecycle.current_sector.definition
-	if rail.current_segment != def.exit_segment:
+	for exit_state in get_sector_exit_draw_states():
+		var segment_id := str(exit_state.get("segment", ""))
+		if rail.current_segment != segment_id:
+			continue
+		var exit_distance := float(exit_state.get("distance", 0.0))
+		rail.distance = minf(rail.distance, maxf(exit_distance - 1.0, 0.0))
 		return
-	rail.distance = minf(rail.distance, maxf(def.exit_distance - 1.0, 0.0))
+
+
+func _get_selected_route_label() -> String:
+	if scenario == null:
+		return ""
+	var scenario_state: Dictionary = scenario.get_state()
+	var selected_route := str(scenario_state.get("selected_route", ""))
+	if selected_route == "":
+		return ""
+	for option in scenario.get_route_options():
+		if str(option.get("id", "")) == selected_route:
+			return str(option.get("label", selected_route))
+	return selected_route
 
 
 func _select_survivor_at(position: Vector2) -> bool:
@@ -2328,14 +2728,48 @@ func _screen_to_world(position: Vector2) -> Vector2:
 
 
 func _latest_status_line() -> String:
+	if departure_confirmation_open:
+		return "Confirm departure: click Yes - leave sector or press Enter/Y; No/Esc cancels"
+
+	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
+	if not selected.is_empty():
+		var selected_status := str(selected.get("status_text", ""))
+		var task_status := str(selected.get("task_status", ""))
+		if selected_status != "" and selected_status != "Idle" and _task_status_has_current_feedback(task_status):
+			return selected_status
 	if rail.blocked_reason != "":
 		return rail.blocked_reason
+
+	var departure_blocker := _get_departure_blocker_text()
+	if _is_current_departure_attempt_blocker(departure_blocker):
+		return departure_blocker
+	if scenario != null and scenario.last_status != "" and scenario.last_status != "First run started":
+		return scenario.last_status
 	if yard.last_status != "":
 		return yard.last_status
-	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
+	if departure_blocker != "":
+		return departure_blocker
 	if not selected.is_empty():
 		return str(selected.get("status_text", ""))
 	return ""
+
+
+func _task_status_has_current_feedback(task_status: String) -> bool:
+	return task_status == CrewSimulation.STATUS_ASSIGNED \
+			or task_status == CrewSimulation.STATUS_MOVING \
+			or task_status == CrewSimulation.STATUS_INTERACTING \
+			or task_status == CrewSimulation.STATUS_BLOCKED \
+			or task_status == CrewSimulation.STATUS_CANCELLED
+
+
+func _is_current_departure_attempt_blocker(departure_blocker: String) -> bool:
+	if departure_blocker == "" or lifecycle == null or yard == null:
+		return false
+	if str(lifecycle.transition_blocked_reason) == "":
+		return false
+	if str(yard.last_status) != str(lifecycle.transition_blocked_reason):
+		return false
+	return departure_blocker == str(lifecycle.transition_blocked_reason)
 
 
 func _yes_no(value: bool) -> String:

@@ -17,6 +17,7 @@ const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 var crew: RefCounted
 var yard: RefCounted
 var rail: RefCounted
+var scenario: RefCounted
 var enabled: bool = false
 
 
@@ -63,11 +64,16 @@ func evaluate_and_assign() -> int:
 
 func _get_open_work_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
+	if scenario != null and scenario.has_method("get_open_work_targets"):
+		for target in scenario.get_open_work_targets():
+			targets.append(target)
 	if yard == null:
 		return targets
 
 	# 1. Shunter repair
-	if rail != null and rail.get_powered_unit_condition("S") == RailMovement.CONDITION_DAMAGED:
+	if rail != null \
+			and rail.get_powered_unit_condition("S") == RailMovement.CONDITION_DAMAGED \
+			and not rail.get_consist_containing_unit("S").is_empty():
 		targets.append({
 			"type": "repair_shunter",
 			"target_id": "S",
@@ -144,6 +150,10 @@ func _find_best_candidate(task_type: String, target_pos: Vector2) -> String:
 
 
 func _dispatch_task(survivor_id: String, task_type: String, target_id: String) -> bool:
+	if scenario != null and scenario.has_method("dispatch_task"):
+		if scenario.dispatch_task(crew, survivor_id, task_type, target_id):
+			return true
+
 	match task_type:
 		"repair_shunter":
 			return crew.assign_repair_shunter(survivor_id)

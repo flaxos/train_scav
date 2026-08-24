@@ -26,7 +26,7 @@ func _init() -> void:
 func test_readme_and_scene_guide_are_current() -> void:
 	print("Testing current README and in-game guide labels...")
 	var readme := FileAccess.get_file_as_string("res://README.md")
-	_expect(readme.contains("Sprint 7: Scavenging / Resources"), "README names Sprint 7 as active sprint")
+	_expect(readme.contains("Sprint 8: First Vertical Slice"), "README names Sprint 8 as active sprint")
 	_expect(not readme.contains("Sprint 4: Railway Operations Systems"), "README no longer advertises stale Sprint 4 active sprint")
 
 	var packed_scene := load("res://scenes/bootstrap/Main.tscn") as PackedScene
@@ -36,8 +36,8 @@ func test_readme_and_scene_guide_are_current() -> void:
 	await process_frame
 	var lines: Array[String] = scene.get_uat_tutorial_lines()
 	var guide := "\n".join(lines)
-	_expect(guide.contains("Train Scav - Sprint 7 UAT Guide"), "in-game guide title names Sprint 7")
-	_expect(guide.contains("Start diesel is short"), "in-game guide explains the Sprint 7 departure blocker")
+	_expect(guide.contains("Train Scav - Sprint 8 UAT Guide"), "in-game guide title names Sprint 8")
+	_expect(guide.contains("vertical slice"), "in-game guide explains the Sprint 8 vertical-slice goal")
 	_expect(not guide.contains("Sprint 5A UAT Guide"), "in-game guide no longer exposes stale Sprint 5A label")
 	scene.queue_free()
 
@@ -52,7 +52,7 @@ func test_sector_b_visual_state_is_distinct() -> void:
 
 	_expect(scene.has_method("get_sector_visual_state"), "Main scene exposes sector visual-state helper")
 	if scene.has_method("get_sector_visual_state"):
-		scene.train_resources.set_amount("diesel", 20.0)
+		_prepare_scene_for_departure(scene)
 		var visual_a: Dictionary = scene.get_sector_visual_state()
 		_expect(str(visual_a.get("template_name", "")) == "Sector A", "initial sector visual state names Sector A")
 
@@ -155,7 +155,7 @@ func test_departure_confirmation_flow() -> void:
 		return
 
 	var def = scene.lifecycle.current_sector.definition
-	scene.train_resources.set_amount("diesel", 20.0)
+	_prepare_scene_for_departure(scene)
 	scene.rail.current_segment = def.exit_segment
 	scene.rail.distance = def.exit_distance + 8.0
 	scene.rail.direction = 1
@@ -173,7 +173,7 @@ func test_departure_confirmation_flow() -> void:
 	_expect(text.contains("Leave Sector 0?"), "confirmation asks whether to leave the current sector")
 	_expect(text.contains("Rolling stock left behind"), "confirmation reports rolling stock abandonment")
 	_expect(text.contains("[C]"), "confirmation lists detached tanker C as left behind")
-	_expect(text.contains("[W]"), "confirmation lists detached workshop wagon W as left behind")
+	_expect(not text.contains("[W]"), "confirmation does not list W before the industrial sector exists")
 	_expect(text.contains("Diesel cost"), "confirmation reports departure diesel cost")
 	_expect(text.contains("Uncollected POI supplies"), "confirmation warns POI supplies are abandoned")
 
@@ -204,6 +204,13 @@ func _step_crew_until_idle(crew: CrewSimulation, max_frames: int) -> void:
 		if str(state.get("task_status", "")) == CrewSimulation.STATUS_COMPLETED \
 				or str(state.get("task_status", "")) == CrewSimulation.STATUS_IDLE:
 			return
+
+
+func _prepare_scene_for_departure(scene: Node) -> void:
+	if scene.has_method("get_vertical_slice_state") and scene.scenario != null:
+		scene.scenario.execute_scenario_interaction("clear_obstruction", "opening_obstruction", "olek")
+		scene.scenario.execute_scenario_interaction("repair_onboard_fault", "locomotive_fault", "marta")
+	scene.train_resources.set_amount("diesel", 24.0)
 
 
 func _expect(condition: bool, message: String) -> void:

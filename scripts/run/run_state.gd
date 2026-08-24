@@ -10,6 +10,8 @@ var transition_count: int = 0
 var previous_sector_disposed: bool = false
 var last_departed_sector_id: String = ""
 var run_journal: Array[Dictionary] = []
+var route_choice: String = ""
+var next_sector_profile: String = ""
 
 
 func _init(initial_seed: int = 12345) -> void:
@@ -19,6 +21,8 @@ func _init(initial_seed: int = 12345) -> void:
 	previous_sector_disposed = false
 	last_departed_sector_id = ""
 	run_journal = []
+	route_choice = ""
+	next_sector_profile = ""
 
 
 func record_transition(departed_id: String, entered_id: String, dest_seed: int, consist_order: Array[String]) -> void:

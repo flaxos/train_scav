@@ -97,3 +97,11 @@ Record decisions that would otherwise be repeatedly re-litigated. Keep entries c
 ## D-024 — Scavenging ownership is physical
 **Decision:** Sprint 7 separates resource ownership by domain. Sector POIs own searched state and uncollected loot; survivors own carried cargo; the train owns deposited diesel/food/parts. Searching reveals resources but never adds them to the train. Deposit at the train storage point transfers carried cargo into the train stockpile. Sector departure requires and consumes train diesel, and cannot strand survivors outside the train.
 **Reason:** The stop/search/haul/depart loop only proves the hypothesis if useful supplies remain physically outside the train until people retrieve them. The Sprint 6 lifecycle remains the sole authority for irreversible sector departure and disposal.
+
+## D-025 — First vertical slice composes existing systems
+**Decision:** Sprint 8 uses a small authored scenario coordinator to compose existing train, crew, sector, scavenging, yard and resource systems. The coordinator may configure deterministic sector templates, expose objectives and report scenario blockers, but it observes authoritative gameplay state instead of owning parallel copies. Workshop wagon `W` is recovered only by physical coupling, workshop activation is a separate crew/resource task after recovery, and the final route branch writes run/next-sector metadata rather than resolving the slice through a scripted mission branch. Developer UAT may be paced for a 10-15 minute prototype run instead of literally taking the eventual first-session duration.
+**Reason:** The vertical slice should prove that the established systems form one coherent game loop without replacing them with a quest framework or hiding physical railway consequences behind scripted shortcuts.
+
+## D-026 — Route choice is physical rail egress
+**Decision:** Sprint 8's final route decision is made by driving the upgraded train across one of the authored exit branches. Route intel and labels explain where each branch leads, but no menu command chooses the route. The sector/lifecycle exit state tells the scenario which branch was crossed, and only then is persistent run route metadata written.
+**Reason:** Route choice should reinforce the core railway premise: track topology, switch state and physical train position determine where the colony goes next.
