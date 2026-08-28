@@ -218,10 +218,13 @@ RunState / sector index
   -> normal gameplay
 ```
 
-`WorldgenProceduralSpatialEmbedding` is not a generic graph layout solver. It contains small deterministic physical placement grammars for the three Sprint 9 production forms:
+`WorldgenProceduralSpatialEmbedding` is not a generic graph layout solver. It contains small deterministic physical placement grammars for the six production forms:
 - `rural_through`;
 - `village_passing_station`;
-- `small_town_goods`.
+- `small_town_goods`;
+- `agricultural_loading_point`;
+- `river_valley_constrained`;
+- `declining_abandoned_branch`.
 
 It consumes only the `spatial` RNG stream and emits the same embedding contract already proven in 9D/9E.
 
@@ -235,7 +238,7 @@ Meaning remains layered:
 
 Generated spatial decisions are appended to the existing generation trace under `stage: spatial_embedding`. They do not replace 9G semantic decisions.
 
-Generated POIs are initial `SectorPOIs` state. Every production procedural sector includes enough obtainable diesel in generated POIs to pay the next departure cost from a low-diesel entry state, but this is not granted directly: resource ownership still happens only through the existing search -> haul -> deposit loop. Generated goods rolling stock is initial detached `RailMovement` state using existing wagon type metadata, and wagon ownership still happens only through physical coupling.
+Generated POIs are initial `SectorPOIs` state. Every production procedural sector includes enough obtainable diesel in generated POIs to pay the next departure cost from a low-diesel entry state, but this is not granted directly: resource ownership still happens only through the existing search -> haul -> deposit loop. Generated goods rolling stock is initial detached `RailMovement` state using existing explicit wagon type metadata, and wagon ownership still happens only through physical coupling. Declining-branch abandoned tracks reconstruct as display-only runtime segments and are not routable.
 
 The isolated closeout harness remains useful for debugging generated railways, but final Sprint 9 acceptance is through the normal production entry point.
 

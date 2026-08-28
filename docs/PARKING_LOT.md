@@ -59,6 +59,7 @@ Nothing below may be implemented merely because it appears promising.
 - Disease systems.
 - Detailed bridge engineering.
 - Persistent simulation behind the player — explicitly contrary to current forward-only architecture unless design changes.
+- Future worldgen machinery beyond Sprint 11: weighted feature tuning, topology retries/fallbacks, arbitrary module composition, general layout solving, terrain rendering, infrastructure hazards and larger regional packs.
 
 ## Presentation / content
 - Final art pipeline using generative models.

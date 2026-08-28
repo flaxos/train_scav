@@ -182,21 +182,22 @@ Only after the vertical slice is fun, Phase C should deepen the systems that mak
 | --- | --- | --- |
 | 9 | Production procedural railway sectors | Wires the proven Sprint 9 generator into the normal sector lifecycle after the authored opening, with three bounded procedural railway forms. |
 | 10 | Rolling-stock ecosystem | Gives generated yards meaningful things to contain and recover. |
-| 11 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock variety exists. |
-| 12 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
-| 13 | Survivor depth | Makes expedition and job decisions more consequential after world variety exists. |
-| 14 | Settlements, factions & trading | Gives people, resources and route choices persistent external meaning. |
-| 15 | Threats/combat | Adds danger after non-combat exploration already has depth. |
-| 16 | Run systems | Adds save/load, difficulty, world config and run setup once the loop is stable. |
-| 17 | Player UX pass | Improves onboarding, information architecture and controls after the systems settle. |
-| 18 | Presentation pipeline | Adds generated/authored art, audio and environmental presentation after gameplay shape is proven. |
+| 11 | Procgen variety pass | Promotes the remaining researched railway forms now that production procgen and rolling-stock function exist. |
+| 12 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock and world variety exist. |
+| 13 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
+| 14 | Survivor depth | Makes expedition and job decisions more consequential after world variety exists. |
+| 15 | Settlements, factions & trading | Gives people, resources and route choices persistent external meaning. |
+| 16 | Threats/combat | Adds danger after non-combat exploration already has depth. |
+| 17 | Run systems | Adds save/load, difficulty, world config and run setup once the loop is stable. |
+| 18 | Player UX pass | Improves onboarding, information architecture and controls after the systems settle. |
+| 19 | Presentation pipeline | Adds generated/authored art, audio and environmental presentation after gameplay shape is proven. |
 
 ### Sprint 9 — Procedural Railway & World Grammar
 
 Sprint 9 was implemented as gated increments so procedural variety did not rewrite validated railway gameplay in one large step.
 
 Status:
-> Implemented - final normal-game human UAT pending.
+> Complete.
 
 Sprint 9 increments:
 - 9A: railway/world grammar research, schema and fixtures;
@@ -207,6 +208,26 @@ Sprint 9 increments:
 - 9F: deterministic generation request/context, named RNG streams and generation trace;
 - 9G: first generated semantic railway, `village_passing_station`;
 - closeout: production `SectorLifecycle` handoff after the authored opening -> deterministic procedural `SectorDefinition` -> generated `SectorInstance` -> existing gameplay systems.
+
+### Sprint 10 — Rolling-Stock Ecosystem
+
+Sprint 10 formalises wagon types through a small shared catalogue, makes generated salvage use explicit `unit_id -> type_id` metadata, and gives recoverable non-locomotive stock real capability/capacity effects without adding a broad economy or multi-locomotive system.
+
+Status:
+> Implemented - final normal-game human UAT pending.
+
+Sprint 10 acceptance:
+> The player can discover at least two materially different generated wagon functions, inspect them, physically recover them through coupling, gain their capability and carry their unique identity/type/capability into later sectors.
+
+### Sprint 11 — Procgen Variety Pass
+
+Sprint 11 promotes the remaining researched Sprint 9 reference forms into production generation: `agricultural_loading_point`, `river_valley_constrained` and `declining_abandoned_branch`. It keeps authored sectors 0-1 intact, keeps existing runtime authorities, and adds bounded deterministic spatial/topological variation without a general layout solver or new gameplay pillar.
+
+Status:
+> Automated validation complete - human UAT pending.
+
+Sprint 11 acceptance:
+> Normal production generation can deterministically produce all six bounded railway forms, every generated sector remains traversable and escapable, agricultural/storage branches are physically usable, abandoned declining-branch track stays display-only, POIs remain resource-safe, and the full regression suite passes.
 
 9A acceptance:
 > The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.

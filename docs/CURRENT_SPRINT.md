@@ -1,142 +1,137 @@
-# Current Sprint - Sprint 9: Production Procedural Sectors
+# Current Sprint - Sprint 11: Procgen Variety Pass
 
-**Status:** IMPLEMENTED - FINAL HUMAN UAT PENDING
+**Status:** AUTOMATED VALIDATION COMPLETE - HUMAN UAT PENDING
 
 ## Hypothesis
-After the existing authored/demo opening sectors, the normal production `SectorLifecycle` can deterministically request procedural railway sectors from the Sprint 9 generator using run seed, sector index and generation identity. The generated sectors become real `SectorDefinition`/`SectorInstance` objects and reuse the existing train, crew, resource, scavenging, rolling-stock and irreversible departure systems.
+Generated sectors feel more replayable when the production generator can produce a wider set of already-researched railway places, while still using the existing sector lifecycle, rail movement, POIs, resources and rolling-stock ownership systems.
 
-Sprint 9 is complete only after the normal-game human UAT below passes. Do not create Sprint 9H, 9I or further railway-generator foundation work.
-
-## Authored -> Procedural Boundary
-The crafted opening remains intact:
+The player should see different generated sectors after the authored opening:
 
 ```text
-sector 0: authored departure yard
-sector 1: authored forward industrial yard / route choice
-sector 2+: deterministic procedural sectors
+rural through
+village passing station
+small-town goods sector
+agricultural loading point
+river-valley constrained sector
+declining abandoned branch
 ```
 
-`SectorDefinitionProvider.FIRST_PROCEDURAL_SECTOR_INDEX` is the explicit handoff boundary.
+Each form must remain a real `SectorDefinition` and `SectorInstance` that drives through the existing `RailMovement` authority.
 
-## Implemented Production Pipeline
-
-```text
-RunState
-  -> SectorLifecycle
-  -> SectorDefinitionProvider
-  -> authored SectorDefinition when sector_index < 2
-  -> WorldgenProductionSectorGenerator when sector_index >= 2
-  -> WorldgenGenerationRequest / WorldgenGenerationContext
-  -> STREAM_ARCHETYPE selection
-  -> WorldgenSemanticGenerator
-  -> SectorBlueprint
-  -> WorldgenSchemaValidator
-  -> WorldgenProceduralSpatialEmbedding
-  -> WorldgenRuntimeReconstructor
-  -> generated SectorDefinition
-  -> SectorInstance
-  -> RailMovement.configure_track_layout()
-  -> normal gameplay
-```
-
-`SectorLifecycle` still owns departure validation, diesel cost, previous-sector disposal, train transfer, crew relinking and run-journal recording. Worldgen only supplies the next sector definition/content.
-
-## Procedural Archetypes
-Sprint 9 production generation supports three bounded railway forms:
-
-| Archetype | Gameplay role |
-| --- | --- |
-| `rural_through` | Sparse travel-through sector with active entry -> exit railway. |
-| `village_passing_station` | Through route with genuine double-ended passing loop and station/platform semantics. |
-| `small_town_goods` | Through route plus connected goods/loading track and existing rolling-stock salvage opportunity. |
-
-Deferred procedural archetypes remain deferred: agricultural loading, river-valley constrained, and declining/abandoned branch.
-
-## Determinism
-Generation identity includes:
-- run seed;
-- sector index;
-- route profile;
-- region pack;
-- grammar version;
-- generator version.
-
-Named RNG stream ownership:
-- `archetype`: selects one of the three supported production forms;
-- `topology`: semantic railway decisions;
-- `world_entities`: station/settlement/freight relationship choices;
-- `spatial`: bounded physical layout choices;
-- `pois`: generated searchable opportunities using existing `SectorPOIs`;
-- `rolling_stock`: existing-type detached wagon placement for goods sectors;
-- `decoration`: not used for gameplay state and proven not to perturb generated results.
-
-## Existing Gameplay Reuse
-- Generated track is configured through `WorldgenRuntimeReconstructor` -> `RailMovement.configure_track_layout()`.
-- Generated POIs are loaded into `SectorPOIs`; searching still follows discover -> carry -> deposit -> owned resource.
-- Every generated production sector includes enough obtainable diesel in POIs to satisfy the next departure cost from a low-diesel entry state.
-- Generated goods rolling stock uses existing wagon type prefixes and is placed as detached rail state; ownership still requires physical coupling through `RailMovement`.
-- `FirstRunScenario` skips authored-scenario mutation for procedural definitions so generated sector content is not overwritten.
-
-## Sprint 9 Increment Summary
-- 9A: source-neutral railway/world grammar, schema and reference fixtures.
-- 9B: immutable `SectorBlueprint`, canonical hashes and six authored archetypes.
-- 9C: semantic/topological validation with structured diagnostics.
-- 9D: one authored blueprint plus authored embedding reconstructed into `RailMovement`.
-- 9E: all six authored archetypes reconstructed through the same runtime path.
-- 9F: deterministic generation request/context, named RNG streams and trace metadata.
-- 9G: first generated semantic railway, `village_passing_station`, validated through 9C.
-- Final closeout: production sector lifecycle automatically enters deterministic procedural sectors after the authored opening.
-
-## Automated Acceptance
-- [x] Existing authored sector 0 and sector 1 remain selected before the handoff.
-- [x] Sector index 2+ is selected through the procedural provider.
-- [x] Same seed/index reproduces archetype, blueprint hash, trace hash, spatial embedding hash, runtime topology hash, POI signature and rolling-stock signature.
-- [x] Known deterministic sample covers all three supported archetypes.
-- [x] A 120-sector generated sweep validates semantics, reconstructs runtime layouts and drives entry -> exit.
-- [x] Decoration stream pre-consumption does not alter generated gameplay output.
-- [x] Rural, village and goods procedural sectors include enough obtainable diesel to avoid mandatory-departure fuel softlocks.
-- [x] A low-diesel authored -> rural procedural handoff can refuel through normal search, carry, deposit and return-crew flow.
-- [x] Generated goods sector places existing rolling stock off the main and recovers it only by physical coupling.
-- [x] Production lifecycle test covers authored -> procedural and procedural -> procedural transitions.
-- [x] Persistent consist, controlled power, crew, survivor needs/skills and resources survive transitions.
-- [x] Previous sectors are disposed and cannot be revisited.
-- [x] Normal `Main.tscn` reports procedural source, archetype and blueprint hash.
-
-## Human UAT Required
-Sprint 9 can be marked complete after this normal-game UAT passes:
-
-1. Launch the normal production game from `res://scenes/bootstrap/Main.tscn`.
-2. Start a fresh run with a known seed.
-3. Play through authored sector 0 and confirm the departure yard behaves as before.
-4. Depart normally to authored sector 1 and recover/activate the workshop wagon as before.
-5. Cross one route exit in sector 1 and depart normally.
-6. Confirm sector 2 is automatically generated without using a debug regenerate command.
-7. Confirm debug state shows the same run seed, sector index `2`, `PROCEDURAL`, selected archetype and blueprint hash.
-8. Confirm the same locomotive, consist, survivors and owned resources persisted.
-9. Reverse toward the old boundary and confirm the authored sector cannot be revisited.
-10. Drive/explore the generated sector normally.
-11. If the archetype is `village_passing_station`, operate the passing route and use the station POI through normal scavenging.
-12. If the archetype is `small_town_goods`, enter the goods/loading track and recover the generated wagon through existing coupling/shunting.
-13. Return all crew to the train and depart normally.
-14. Confirm sector 3 is another procedural sector, sector index increments and persistent state survives again.
-15. Restart with the same seed and confirm the same procedural sector chain identities reproduce.
-16. Start or test another known seed and confirm materially different procedural topology/archetype occurs.
-
-Use a goods-producing seed for at least one UAT pass so existing shunting/coupling is proven inside a procedural sector.
+## Scope Contract
+- Promote the existing Sprint 9 reference archetypes `agricultural_loading_point`, `river_valley_constrained` and `declining_abandoned_branch` into production procedural generation.
+- Keep authored sectors 0-1 intact.
+- Keep Sprint 10 rolling-stock catalogue and physical ownership rules intact.
+- Use deterministic generation identity and named RNG streams.
+- Add only bounded spatial/topological variation around already-proven archetype shapes.
+- Reuse existing POI/resource/scavenging systems.
+- Ensure every generated sector remains escapable through a main route.
 
 ## Explicit Exclusions
-Do not implement as part of Sprint 9:
-- new wagon ecosystem/types;
-- multiple powered locomotives;
-- procedural agricultural, river-valley or abandoned-branch generators;
-- generic graph layout or constraint solving;
-- terrain, rivers, roads, bridges, towns or generated world geometry;
-- POI/resource system replacement;
-- rolling-stock ownership shortcuts;
-- shunting-solvability search;
+Do not implement during Sprint 11:
+- locomotive acquisition;
+- multi-locomotive control;
+- independent trains;
+- infrastructure hazards as gameplay damage;
+- bridge failure simulation;
+- terrain/road/water rendering as a full system;
+- general graph layout solving;
+- shunting solvability search;
+- new rolling-stock types;
+- new economy/resource balance;
 - save/load changes;
-- UI/art/audio polish;
-- Sprint 10 work.
+- final UI/art/audio.
 
-## Next Roadmap Item
-After human UAT passes, Sprint 9 is complete and the roadmap moves to Sprint 10 - Rolling-stock ecosystem.
+## Production Archetypes
+Sprint 11 production generation must support all six bounded railway forms:
+
+| Archetype | Required production behavior |
+| --- | --- |
+| `rural_through` | Sparse active main, simple resource opportunity. |
+| `village_passing_station` | Double-ended passing loop with station/platform semantics. |
+| `small_town_goods` | Loop plus reachable goods/loading track and Sprint 10 salvage. |
+| `agricultural_loading_point` | Through main plus reachable agricultural spur/loading/headshunt. |
+| `river_valley_constrained` | Constrained loop plus bridge/water semantic relation. |
+| `declining_abandoned_branch` | Active main/loop plus reachable overgrown storage and display-only abandoned track. |
+
+## Variety Model
+Keep the model small and inspectable.
+
+Allowed Sprint 11 variation:
+- archetype selection among all six forms;
+- side/offset/length choices for loop-based layouts;
+- agricultural spur side, spur length and loading length;
+- river-valley bridge approach length and constrained loop shape;
+- declining-branch yard side, storage length and abandoned display-track shape;
+- POI naming/resource placement matched to the generated form.
+
+Disallowed variation:
+- arbitrary recursive module composition;
+- topology retries/fallbacks beyond clear failure diagnostics;
+- generated hazards that block departure;
+- generated unreachable mandatory resources.
+
+## Acceptance
+Sprint 11 is complete when:
+- `WorldgenProductionSectorGenerator` deterministically supports all six production archetypes.
+- The three promoted archetypes produce valid `SectorBlueprint` data from seed/context, not by loading authored fixture files at runtime.
+- Procedural spatial embedding supports all six production archetypes with bounded deterministic variation.
+- Main-route traversal works for a broad generated seed sweep.
+- Branch/stub routes for agricultural loading and declining storage are physically reachable and reversible.
+- Declining abandoned tracks remain display-only and cannot be routed by `RailMovement`.
+- River-valley sectors include bridge/water semantic relations and remain traversable.
+- Generated POIs provide enough obtainable diesel for departure in every supported archetype.
+- Existing Sprint 10 salvage behavior remains intact for `small_town_goods`.
+- Normal `Main.tscn` can enter all six generated archetypes using seeded/debug-start UAT commands.
+- Full `tests/*.gd` suite, production headless launch and `git diff --check` pass.
+
+## Automated Validation
+Add focused Sprint 11 tests covering:
+- catalogue of six supported production archetypes;
+- deterministic identity for promoted archetypes;
+- large generated seed sweep across all six archetypes;
+- route traversal for main, agricultural loading, declining storage and river loop;
+- POI/resource safety for all forms;
+- display-only abandoned-track safety;
+- normal `Main.tscn` debug-start visibility for all six production archetypes.
+- scripted normal-`Main.tscn` debug-start UAT rehearsal for agricultural loading, river-valley and declining-branch route behavior.
+- scripted normal-game UAT rehearsal that starts in authored Sector 0, transitions through authored Sector 1, and reaches the promoted generated forms in Sector 2.
+
+## Human UAT
+Use normal `res://scenes/bootstrap/Main.tscn`.
+
+Targeted debug-start UAT may use:
+
+```bash
+TRAIN_SCAV_RUN_SEED=<known_seed> TRAIN_SCAV_START_SECTOR=2 TRAIN_SCAV_START_ROUTE=<profile> /home/flax/bin/godot --path .
+```
+
+Known sector-2 `industrial` fixtures:
+
+| Seed | Expected archetype |
+| --- | --- |
+| `6003` | `rural_through` |
+| `6012` | `village_passing_station` |
+| `6001` | `small_town_goods` |
+| `6005` | `agricultural_loading_point` |
+| `6004` | `river_valley_constrained` |
+| `6008` | `declining_abandoned_branch` |
+
+Final UAT should confirm at least three promoted/generated forms in play:
+1. agricultural loading point: inspect route/debug state, drive main route, enter the loading/headshunt route and reverse out.
+2. river-valley constrained: inspect route/debug state, confirm bridge/water semantic form in debug, drive main and loop route.
+3. declining abandoned branch: inspect route/debug state, enter active storage, confirm abandoned track is visible/display-only and not routable, reverse out.
+
+Automated debug-start rehearsal:
+
+```bash
+/home/flax/bin/godot --headless --path . --script tests/sprint11_scripted_uat_rehearsal.gd
+```
+
+Automated normal-game handoff rehearsal:
+
+```bash
+/home/flax/bin/godot --headless --path . --script tests/sprint11_normal_game_uat_rehearsal.gd
+```
+
+Do not start the later locomotive, hazard or survivor-depth sprints during Sprint 11.
