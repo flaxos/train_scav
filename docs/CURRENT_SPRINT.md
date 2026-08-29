@@ -1,6 +1,6 @@
 # Current Sprint - Sprint 14: Infrastructure Hazards
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE (UAT PASSED)
 
 ## Hypothesis
 Railway infrastructure conditions (damaged points, restricted bridges, and damaged track) create meaningful operational problems that the player must solve physically using existing train, crew, repair, and route-choice systems, without scripted quest chains.
