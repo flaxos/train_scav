@@ -237,6 +237,14 @@ func request_transition() -> bool:
 		return false
 
 	is_transitioning = true
+	var crossed_exit: Dictionary = {}
+	if current_sector != null and current_sector.has_method("get_crossed_exit"):
+		crossed_exit = current_sector.get_crossed_exit()
+	if not crossed_exit.is_empty() and run_state != null:
+		run_state.route_choice = str(crossed_exit.get("route_id", crossed_exit.get("id", "")))
+		run_state.next_sector_profile = str(crossed_exit.get("profile", "forward"))
+	_prepare_scenario_departure_context()
+
 	var next_index := run_state.sector_index + 1
 	var next_def := _create_sector_definition(next_index)
 	if next_def == null:

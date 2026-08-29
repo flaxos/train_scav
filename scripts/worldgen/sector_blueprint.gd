@@ -3,6 +3,20 @@ class_name SectorBlueprint
 
 const WorldgenCanonical := preload("res://scripts/worldgen/worldgen_canonical.gd")
 
+const ROLE_THROUGH_MAIN := "THROUGH_MAIN"
+const ROLE_PASSING_LOOP := "PASSING_LOOP"
+const ROLE_PLATFORM_TRACK := "PLATFORM_TRACK"
+const ROLE_GOODS_YARD_TRACK := "GOODS_YARD_TRACK"
+const ROLE_LOADING_TRACK := "LOADING_TRACK"
+const ROLE_HEADSHUNT := "HEADSHUNT"
+const ROLE_INDUSTRIAL_SPUR := "INDUSTRIAL_SPUR"
+const ROLE_AGRICULTURAL_SPUR := "AGRICULTURAL_SPUR"
+const ROLE_STORAGE_TRACK := "STORAGE_TRACK"
+const ROLE_DEPOT_TRACK := "DEPOT_TRACK"
+const ROLE_CROSSOVER := "CROSSOVER"
+const ROLE_ABANDONED_TRACK := "ABANDONED_TRACK"
+const ROLE_BRANCH_LINE := "BRANCH_LINE"
+
 var _data: Dictionary = {}
 var _canonical_hash: String = ""
 
@@ -26,6 +40,86 @@ func get_archetype_id() -> String:
 
 func get_canonical_hash() -> String:
 	return _canonical_hash
+
+
+func get_topology_signature() -> String:
+	var nodes := _get_rail_nodes()
+	var edges := _get_rail_edges()
+
+	var node_types: Dictionary = {}
+	var node_type_counts: Dictionary = {}
+	for node_v in nodes:
+		var node := node_v as Dictionary
+		var node_id := str(node.get("id", ""))
+		var ntype := str(node.get("type", ""))
+		node_types[node_id] = ntype
+		node_type_counts[ntype] = int(node_type_counts.get(ntype, 0)) + 1
+
+	var role_counts: Dictionary = {}
+	var node_adjacency: Dictionary = {}
+	var canonical_edges: Array[String] = []
+
+	for edge_v in edges:
+		var edge := edge_v as Dictionary
+		var role := str(edge.get("role", ""))
+		var from_id := str(edge.get("from", ""))
+		var to_id := str(edge.get("to", ""))
+		var from_type := str(node_types.get(from_id, "UNKNOWN"))
+		var to_type := str(node_types.get(to_id, "UNKNOWN"))
+		var is_bidirectional := bool(edge.get("bidirectional", true))
+
+		role_counts[role] = int(role_counts.get(role, 0)) + 1
+
+		if is_bidirectional:
+			var pair := [from_type, to_type]
+			pair.sort()
+			canonical_edges.append("%s:bi(%s<->%s)" % [role, pair[0], pair[1]])
+		else:
+			canonical_edges.append("%s:oneway(%s->%s)" % [role, from_type, to_type])
+
+		if not node_adjacency.has(from_id):
+			node_adjacency[from_id] = []
+		(node_adjacency[from_id] as Array).append("%s:%s->%s" % [role, "bi" if is_bidirectional else "out", to_type])
+
+		if not node_adjacency.has(to_id):
+			node_adjacency[to_id] = []
+		(node_adjacency[to_id] as Array).append("%s:%s->%s" % [role, "bi" if is_bidirectional else "in", from_type])
+
+	canonical_edges.sort()
+
+	var node_keys := node_type_counts.keys()
+	node_keys.sort()
+	var node_count_str := ""
+	for k in node_keys:
+		if not node_count_str.is_empty():
+			node_count_str += ","
+		node_count_str += "%s:%d" % [k, int(node_type_counts[k])]
+
+	var role_keys := role_counts.keys()
+	role_keys.sort()
+	var role_count_str := ""
+	for k in role_keys:
+		if not role_count_str.is_empty():
+			role_count_str += ","
+		role_count_str += "%s:%d" % [k, int(role_counts[k])]
+
+	var node_sig_list: Array[String] = []
+	for node_v in nodes:
+		var node := node_v as Dictionary
+		var node_id := str(node.get("id", ""))
+		var ntype := str(node.get("type", ""))
+		var links: Array = (node_adjacency.get(node_id, []) as Array).duplicate()
+		links.sort()
+		node_sig_list.append("%s[%s]" % [ntype, ",".join(links)])
+	node_sig_list.sort()
+
+	return "%s|N(%s)|R(%s)|E(%s)|A(%s)" % [
+		get_archetype_id(),
+		node_count_str,
+		role_count_str,
+		",".join(canonical_edges),
+		";".join(node_sig_list),
+	]
 
 
 func get_tracks_by_role(role: String) -> Array[Dictionary]:
@@ -154,6 +248,22 @@ func _get_rail_nodes() -> Array:
 
 func _get_rail_edges() -> Array:
 	return _get_rail_graph().get("edges", []) as Array
+
+
+func get_exit_nodes() -> Array[Dictionary]:
+	var exit_nodes: Array[Dictionary] = []
+	for node in _get_rail_nodes():
+		var node_dict := node as Dictionary
+		if str(node_dict.get("type", "")) == "EXIT":
+			exit_nodes.append(node_dict.duplicate(true))
+	return exit_nodes
+
+
+func get_exit_node_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for node in get_exit_nodes():
+		ids.append(str(node.get("id", "")))
+	return ids
 
 
 func _get_world_entities() -> Array:

@@ -1173,9 +1173,15 @@ func _draw_sector_exit() -> void:
 		var color := exit_color
 		if route_id == "industrial":
 			color = Color(0.96, 0.67, 0.24, 0.95)
+		elif route_id == "agricultural":
+			color = Color(0.88, 0.82, 0.32, 0.95)
 		elif route_id == "settlement":
 			color = Color(0.42, 0.78, 0.48, 0.95)
-		elif route_id == "direct":
+		elif route_id == "branch" or route_id == "declining":
+			color = Color(0.85, 0.55, 0.75, 0.95)
+		elif route_id == "bridge":
+			color = Color(0.45, 0.75, 0.95, 0.95)
+		elif route_id == "direct" or route_id == "main":
 			color = Color(0.65, 0.72, 0.82, 0.95)
 		draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), color, 4.0)
 		draw_string(get_theme_default_font(), exit_pos + Vector2(-54.0, -38.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, color)

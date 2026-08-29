@@ -16,6 +16,7 @@ const ROLE_STORAGE_TRACK := "STORAGE_TRACK"
 const ROLE_DEPOT_TRACK := "DEPOT_TRACK"
 const ROLE_CROSSOVER := "CROSSOVER"
 const ROLE_ABANDONED_TRACK := "ABANDONED_TRACK"
+const ROLE_BRANCH_LINE := "BRANCH_LINE"
 
 const NODE_ENTRY := "ENTRY"
 const NODE_EXIT := "EXIT"
@@ -55,6 +56,7 @@ const _ALLOWED_ROLES := {
 	ROLE_DEPOT_TRACK: true,
 	ROLE_CROSSOVER: true,
 	ROLE_ABANDONED_TRACK: true,
+	ROLE_BRANCH_LINE: true,
 }
 
 const _YARD_ROLES := {
@@ -238,6 +240,27 @@ func _validate_entry_exit_connectivity(
 			"",
 			{"entry_node": entry_id, "exit_node": exit_id}
 		)
+
+	for node in _as_array(rail_graph.get("nodes", [])):
+		if typeof(node) != TYPE_DICTIONARY:
+			continue
+		var node_dict := node as Dictionary
+		if str(node_dict.get("type", "")) != NODE_EXIT:
+			continue
+		var other_exit_id := str(node_dict.get("id", ""))
+		if other_exit_id == exit_id or other_exit_id.is_empty():
+			continue
+		if not _has_active_path(edges, entry_id, other_exit_id):
+			_add_diagnostic(
+				diagnostics,
+				"ENTRY_EXIT_DISCONNECTED",
+				"entry_node %s has no active route to exit_node %s" % [entry_id, other_exit_id],
+				"",
+				entry_id,
+				"",
+				"",
+				{"entry_node": entry_id, "exit_node": other_exit_id}
+			)
 
 
 func _validate_rail_topology(

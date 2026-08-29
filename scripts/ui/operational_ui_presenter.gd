@@ -197,6 +197,7 @@ static func present_route_option(exit_def: Dictionary, mobility: Dictionary, act
 		"action_hint": action_hint,
 		"switch_aligned": switch_aligned,
 		"primary_reason": str(eval_result.get("primary_reason", "")),
+		"intel": (exit_def.get("intel", {}) as Dictionary).duplicate(true),
 	}
 
 
@@ -402,6 +403,16 @@ static func format_player_routes_panel(
 			var reasons: Array = rv.get("reasons", []) as Array
 			for r in reasons:
 				lines.append("    - %s" % str(r))
+
+			var intel_block: Dictionary = rv.get("intel", {})
+			if not intel_block.is_empty():
+				var dest_type := str(intel_block.get("destination_type", ""))
+				var food_p := str(intel_block.get("food_prospects", ""))
+				var parts_p := str(intel_block.get("parts_prospects", ""))
+				var fuel_p := str(intel_block.get("fuel_prospects", ""))
+				var conf := str(intel_block.get("confidence", "MODERATE"))
+				if dest_type != "":
+					lines.append("    [Intel: %s | Food: %s, Parts: %s, Fuel: %s | Conf: %s]" % [dest_type, food_p, parts_p, fuel_p, conf])
 
 			var hint := str(rv.get("action_hint", ""))
 			if hint != "":

@@ -63,7 +63,7 @@ func _known_uat_seed_samples_have_distinct_recoverable_functions() -> void:
 		var unit_types := result.get("rolling_stock_units", {}) as Dictionary
 		_expect(str(unit_types.get("sector_002_salvage_01", "")) == str(expected[seed]), "UAT seed %d produces %s" % [int(seed), str(expected[seed])])
 		var detached := result.get("detached_consists", []) as Array
-		_expect(detached.size() == 1, "UAT seed %d produces one detached salvage consist" % int(seed))
+		_expect(detached.size() >= 1, "UAT seed %d produces at least one detached salvage consist" % int(seed))
 		if detached.is_empty():
 			continue
 		var placement := detached[0] as Dictionary

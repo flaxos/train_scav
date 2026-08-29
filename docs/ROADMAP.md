@@ -232,27 +232,38 @@ Sprint 11 acceptance:
 
 ### Sprint 12 — Mobility, Burden & Route Requirements
 
-Sprint 12 makes train composition strategically meaningful by introducing a small, explicit contract between train mobility properties (mass, length, traction authority, capabilities) and route requirements (max/min thresholds, required capability tags). It evaluates route eligibility with explicit deterministic reasons when crossing route exit branches without adding multi-locomotive control, hazards, or game-over states.
+Sprint 12 makes train composition strategically meaningful by introducing a small, explicit contract between train mobility properties (mass, length, traction authority, capabilities) and route requirements (max/min thresholds, required capability tags).
 
 Status:
-> Planning — scope contract under review.
+> Complete — passed automated validation and human UAT.
 
-Sprint 12 acceptance:
-> Route exits can express simple requirements (such as maximum mass, maximum length, traction authority, and required capability tags); the train's physical mobility summary is evaluated deterministically; crossing an exit branch with unmet requirements is blocked with an explicit, readable reason; eligible routes can be departed onto normally; and all existing Sprint 1-11 baseline routes remain traversable and valid.
+### Sprint 13 — Consist Operations & Multi-Locomotive Authority
 
-9A acceptance:
-> The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.
+Sprint 13 introduces real multiple-locomotive operations, aggregate traction summation, distinct locomotive identity and damage states, and physical consist reorganisation.
 
-9B acceptance:
-> Six authored researched railway archetypes parse, validate, construct immutable `SectorBlueprint` objects, expose the same semantic query API, hash stably, remain materially different graphs and leave the existing playable sector lifecycle unchanged.
+Status:
+> Complete — passed automated validation and human UAT.
 
-9C acceptance:
-> Semantic blueprints with nonsensical railway topology or world relationships are rejected with useful diagnostic codes and IDs while all six Sprint 9B authored archetypes still validate and the active playable sector lifecycle remains unchanged.
+### Sprint 14 — Railway Infrastructure Hazards
 
-Final Sprint 9 acceptance:
-> After authored sectors 0 and 1, the normal production game automatically creates deterministic procedural sectors from run seed, sector index and generation identity. Generated sectors support rural-through, village-passing and small-town-goods railway forms, validate semantic graphs before use, reconstruct through the existing runtime pipeline, preserve the persistent train/crew/resources/consist, reuse existing scavenging and physical coupling/shunting systems, dispose previous sectors irreversibly, and reproduce the same sector chain for the same seed.
+Sprint 14 introduces physical railway infrastructure hazards (jammed points, damaged bridges with mass limits, damaged track sections) requiring parts and physical engineer crew labor to clear.
 
-Sprint 9 does not implement terrain generation, additional procedural archetypes, a shunting solver, new wagon ecosystem content, save/load changes or a replacement production sector lifecycle.
+Status:
+> Complete — passed automated validation and human UAT.
+
+### Sprint 14.5 — Railway Procgen / Track Layout Quality Pass
+
+Sprint 14.5 upgrades procedural generation with semantic module composition, deterministic topology signatures, and layout geometry profiles.
+
+Status:
+> Complete — passed automated validation and human UAT.
+
+### Sprint 14.6 — Sector Exit Branching & Route Intel
+
+Sprint 14.6 generates 1–3 distinct physical outbound corridors at the right/east boundary, provides rich route intelligence (destination type, confidence, prospects, condition, hazards), and connects physical train exit steering directly to just-in-time next-sector generation context without pre-generated continental maps.
+
+Status:
+> Complete — passed automated validation and verified for human UAT.
 
 ## Phase D — Demo
 

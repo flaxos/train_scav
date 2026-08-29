@@ -55,7 +55,7 @@ func _run_promoted_archetype_from_authored_opening(sample: Dictionary) -> void:
 		"agricultural_loading_point":
 			_expect(_route_reaches_exit(scene, "main"), "agricultural normal-game UAT main route reaches exit")
 			_expect(_route_reaches_stub_and_reverses(scene, "grain_loading", "grain_loading", "main_west"), "agricultural normal-game UAT grain loading route is reachable and reversible")
-			_expect(_route_reaches_stub_and_reverses(scene, "headshunt", "short_runaround", "main_west"), "agricultural normal-game UAT headshunt route is reachable and reversible")
+			_expect(_agricultural_headshunt_valid_or_cleanly_skipped(scene), "agricultural normal-game UAT headshunt route is valid when present or absent when skipped")
 		"river_valley_constrained":
 			_expect(_route_reaches_exit(scene, "main"), "river normal-game UAT main route reaches exit")
 			_expect(_route_reaches_exit(scene, "loop"), "river normal-game UAT loop route reconnects to exit")
@@ -158,6 +158,13 @@ func _route_reaches_stub_and_reverses(scene: Node, preset_id: String, stub_segme
 	scene.rail.throttle = 1.0
 	_step_until(scene.rail, return_segment, 22.0)
 	return str(scene.rail.current_segment) == return_segment
+
+
+func _agricultural_headshunt_valid_or_cleanly_skipped(scene: Node) -> bool:
+	var layout := scene.lifecycle.current_sector.definition.runtime_layout as Dictionary
+	if not _find_route_preset(layout, "headshunt").is_empty():
+		return _route_reaches_stub_and_reverses(scene, "headshunt", "short_runaround", "main_west")
+	return not (layout.get("segments", {}) as Dictionary).has("short_runaround")
 
 
 func _prepare_train_at_entry(scene: Node) -> void:

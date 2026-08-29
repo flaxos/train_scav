@@ -19,9 +19,12 @@ const ARCHETYPE_DECLINING_ABANDONED_BRANCH := "declining_abandoned_branch"
 
 const STREAM_FIXED := "fixed"
 
+# --- Track ID constants (base) ---
 const TRACK_MAIN_WEST := "main_west"
 const TRACK_MAIN_EAST := "main_east"
 const TRACK_RURAL_MAIN := "rural_main"
+const TRACK_RURAL_STATION_MAIN := "rural_station_main"
+const TRACK_RURAL_EXIT_MAIN := "rural_exit_main"
 const TRACK_APPROACH_MAIN := "approach_main"
 const TRACK_STATION_MAIN := "station_main"
 const TRACK_PLATFORM_MAIN := "platform_main"
@@ -44,6 +47,53 @@ const TRACK_OLD_GOODS_LEAD := "old_goods_lead"
 const TRACK_ABANDONED_LOADING_TRACK := "abandoned_loading_track"
 const TRACK_OVERGROWN_STORAGE := "overgrown_storage"
 const TRACK_REMOVED_BRANCH_STUB := "removed_branch_stub"
+
+# --- Track ID constants (composed modules) ---
+const TRACK_VILLAGE_GOODS_LEAD := "village_goods_lead"
+const TRACK_VILLAGE_GOODS_LOADING := "village_goods_loading"
+const TRACK_VILLAGE_GOODS_HEADSHUNT := "village_goods_headshunt"
+const TRACK_STATION_STORAGE := "station_storage"
+const TRACK_STATION_ABANDONED_STUB := "station_abandoned_stub"
+const TRACK_RURAL_STORAGE := "rural_storage"
+const TRACK_RURAL_LOOP := "rural_loop"
+const TRACK_EXTRA_STORAGE := "extra_storage"
+const TRACK_TOWN_INDUSTRIAL_SPUR := "town_industrial_spur"
+const TRACK_TOWN_ABANDONED_REMNANT := "town_abandoned_remnant"
+const TRACK_AGRI_STORAGE := "agri_storage"
+const TRACK_AGRI_EXTRA_LOADING := "agri_extra_loading"
+const TRACK_VALLEY_STORAGE := "valley_storage"
+const TRACK_BRANCH_EXTRA_ABANDONED := "branch_extra_abandoned"
+const TRACK_BRANCH_ACTIVE_STORAGE := "branch_active_storage"
+
+# --- Track ID constants (outbound corridors) ---
+const TRACK_VILLAGE_INDUSTRIAL_EXIT := "village_industrial_exit"
+const TRACK_VILLAGE_AGRICULTURAL_EXIT := "village_agricultural_exit"
+const TRACK_TOWN_INDUSTRIAL_EXIT := "town_industrial_exit"
+const TRACK_TOWN_AGRICULTURAL_EXIT := "town_agricultural_exit"
+const TRACK_AGRI_BRANCH_EXIT := "agri_branch_exit"
+const TRACK_RURAL_BRANCH_EXIT := "rural_branch_exit"
+const TRACK_VALLEY_BRANCH_EXIT := "valley_branch_exit"
+const TRACK_BRANCH_FREIGHT_EXIT := "branch_freight_exit"
+
+const MODULE_STORAGE_SIDING := "storage_siding"
+const MODULE_PASSING_LOOP := "passing_loop"
+const MODULE_SHORT_GOODS_SIDING := "short_goods_siding"
+const MODULE_ABANDONED_STUB := "abandoned_stub"
+const MODULE_EXTRA_STORAGE := "extra_storage"
+const MODULE_INDUSTRIAL_SPUR := "industrial_spur"
+const MODULE_ABANDONED_REMNANT := "abandoned_remnant"
+const MODULE_HEADSHUNT := "headshunt"
+const MODULE_EXTRA_LOADING := "extra_loading"
+const MODULE_EXTRA_ABANDONED := "extra_abandoned"
+const MODULE_ACTIVE_STORAGE := "active_storage"
+
+# --- Outbound corridor module constants ---
+const MODULE_OUTBOUND_INDUSTRIAL := "outbound_industrial"
+const MODULE_OUTBOUND_AGRICULTURAL := "outbound_agricultural"
+const MODULE_OUTBOUND_BRANCH := "outbound_branch"
+
+const MODULE_STATUS_APPLIED := "applied"
+const MODULE_STATUS_SKIPPED := "skipped"
 
 
 func generate_blueprint(source: RefCounted) -> Dictionary:
@@ -170,6 +220,8 @@ func _context_has_required_api(context: RefCounted) -> bool:
 		and context.has_method("to_trace_dictionary")
 
 
+# ---- Legacy 9G decisions (unchanged for old generator version) ----
+
 func _make_decisions(topology_rng: RefCounted, world_rng: RefCounted) -> Dictionary:
 	var platform_track := TRACK_STATION_MAIN
 	if int(topology_rng.range_int(0, 1)) == 1:
@@ -185,47 +237,139 @@ func _make_decisions(topology_rng: RefCounted, world_rng: RefCounted) -> Diction
 func _make_decisions_for_archetype(archetype_id: String, topology_rng: RefCounted, world_rng: RefCounted) -> Dictionary:
 	match archetype_id:
 		ARCHETYPE_RURAL_THROUGH:
+			var modules: Array[String] = []
+			# Optional: wayside storage siding, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_STORAGE_SIDING)
+			# Optional: passing loop upgrade, p = 0.25.
+			if int(topology_rng.range_int(0, 3)) == 0:
+				modules.append(MODULE_PASSING_LOOP)
+			# Optional: outbound rural branch, p = 0.35.
+			if int(topology_rng.range_int(0, 99)) < 35:
+				modules.append(MODULE_OUTBOUND_BRANCH)
 			return {
 				"archetype": archetype_id,
 				"wayside_stop": int(world_rng.range_int(0, 1)) == 1,
+				"modules": modules,
 			}
+
 		ARCHETYPE_VILLAGE_PASSING_STATION:
-			return _make_decisions(topology_rng, world_rng)
+			var platform_track := TRACK_STATION_MAIN
+			if int(topology_rng.range_int(0, 1)) == 1:
+				platform_track = TRACK_PASSING_LOOP
+			var road_access := int(world_rng.range_int(0, 1)) == 1
+			var modules: Array[String] = []
+			# Optional: short goods siding, p = 0.40.
+			if int(topology_rng.range_int(0, 4)) <= 1:
+				modules.append(MODULE_SHORT_GOODS_SIDING)
+			# Optional: storage siding, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_STORAGE_SIDING)
+			# Optional: abandoned stub, p = 0.25.
+			if int(topology_rng.range_int(0, 3)) == 0:
+				modules.append(MODULE_ABANDONED_STUB)
+			# Optional: outbound industrial corridor, p = 0.45.
+			if int(topology_rng.range_int(0, 99)) < 45:
+				modules.append(MODULE_OUTBOUND_INDUSTRIAL)
+			# Optional: outbound agricultural corridor, p = 0.35.
+			if int(topology_rng.range_int(0, 99)) < 35:
+				modules.append(MODULE_OUTBOUND_AGRICULTURAL)
+			return {
+				"archetype": archetype_id,
+				"platform_track": platform_track,
+				"road_access": road_access,
+				"modules": modules,
+			}
+
 		ARCHETYPE_SMALL_TOWN_GOODS:
 			var platform_track := TRACK_PLATFORM_MAIN
 			if int(topology_rng.range_int(0, 1)) == 1:
 				platform_track = TRACK_PASSING_LOOP
 			var road_access := int(world_rng.range_int(0, 1)) == 1
+			var modules: Array[String] = []
+			# Optional: extra storage siding in yard, p = 0.50.
+			if int(topology_rng.range_int(0, 1)) == 0:
+				modules.append(MODULE_EXTRA_STORAGE)
+			# Optional: industrial spur off yard, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_INDUSTRIAL_SPUR)
+			# Optional: abandoned remnant, p = 0.25.
+			if int(topology_rng.range_int(0, 3)) == 0:
+				modules.append(MODULE_ABANDONED_REMNANT)
+			# Optional: outbound industrial branch, p = 0.60.
+			if int(topology_rng.range_int(0, 99)) < 60:
+				modules.append(MODULE_OUTBOUND_INDUSTRIAL)
+			# Optional: outbound agricultural branch, p = 0.40.
+			if int(topology_rng.range_int(0, 99)) < 40:
+				modules.append(MODULE_OUTBOUND_AGRICULTURAL)
 			return {
 				"archetype": archetype_id,
 				"platform_track": platform_track,
 				"road_access": road_access,
+				"modules": modules,
 			}
+
 		ARCHETYPE_AGRICULTURAL_LOADING_POINT:
+			var modules: Array[String] = []
+			# Optional: headshunt, p = 0.50.
+			if int(topology_rng.range_int(0, 1)) == 0:
+				modules.append(MODULE_HEADSHUNT)
+			# Optional: storage siding, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_STORAGE_SIDING)
+			# Optional: extra loading track, p = 0.25.
+			if int(topology_rng.range_int(0, 3)) == 0:
+				modules.append(MODULE_EXTRA_LOADING)
+			# Optional: outbound agricultural branch, p = 0.50.
+			if int(topology_rng.range_int(0, 99)) < 50:
+				modules.append(MODULE_OUTBOUND_AGRICULTURAL)
 			return {
 				"archetype": archetype_id,
 				"secondary_coop": int(world_rng.range_int(0, 1)) == 1,
 				"road_access": int(world_rng.range_int(0, 1)) == 1,
+				"modules": modules,
 			}
+
 		ARCHETYPE_RIVER_VALLEY_CONSTRAINED:
 			var valley_platform_track := TRACK_VALLEY_PLATFORM_MAIN
 			if int(topology_rng.range_int(0, 1)) == 1:
 				valley_platform_track = TRACK_SHORT_PASSING_LOOP
+			var modules: Array[String] = []
+			# Optional: short constrained siding, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_STORAGE_SIDING)
+			# Optional: outbound high valley branch, p = 0.35.
+			if int(topology_rng.range_int(0, 99)) < 35:
+				modules.append(MODULE_OUTBOUND_BRANCH)
 			return {
 				"archetype": archetype_id,
 				"platform_track": valley_platform_track,
 				"road_access": int(world_rng.range_int(0, 1)) == 1,
+				"modules": modules,
 			}
+
 		ARCHETYPE_DECLINING_ABANDONED_BRANCH:
 			var branch_platform_track := TRACK_WORN_PLATFORM_MAIN
 			if int(topology_rng.range_int(0, 1)) == 1:
 				branch_platform_track = TRACK_RUSTY_PASSING_LOOP
+			var modules: Array[String] = []
+			# Optional: extra abandoned remnant, p = 0.40.
+			if int(topology_rng.range_int(0, 4)) <= 1:
+				modules.append(MODULE_EXTRA_ABANDONED)
+			# Optional: active storage siding among decay, p ~= 0.33.
+			if int(topology_rng.range_int(0, 2)) == 0:
+				modules.append(MODULE_ACTIVE_STORAGE)
+			# Optional: outbound freight exit, p = 0.40.
+			if int(topology_rng.range_int(0, 99)) < 40:
+				modules.append(MODULE_OUTBOUND_INDUSTRIAL)
 			return {
 				"archetype": archetype_id,
 				"platform_track": branch_platform_track,
 				"closed_factory": int(world_rng.range_int(0, 1)) == 1,
+				"modules": modules,
 			}
-	return {"archetype": archetype_id}
+
+	return {"archetype": archetype_id, "modules": []}
 
 
 func _make_data_for_archetype(archetype_id: String, decisions: Dictionary) -> Dictionary:
@@ -245,7 +389,15 @@ func _make_data_for_archetype(archetype_id: String, decisions: Dictionary) -> Di
 	return {}
 
 
+# ---- Archetype data builders with module composition ----
+
 func _make_rural_through_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
+	var nodes: Array[Dictionary] = [
+		{"id": "entry", "type": "ENTRY"},
+		{"id": "exit", "type": "EXIT"},
+	]
+	var edges: Array[Dictionary] = []
 	var entities: Array[Dictionary] = [
 		{"id": "wayside_stop", "type": "STATION"},
 	]
@@ -265,6 +417,67 @@ func _make_rural_through_data(decisions: Dictionary) -> Dictionary:
 			"from_entity": "field_road",
 			"to_entity": "wayside_stop",
 		})
+
+	var has_loop := modules.has(MODULE_PASSING_LOOP)
+	var has_storage := modules.has(MODULE_STORAGE_SIDING)
+	var has_branch := modules.has(MODULE_OUTBOUND_BRANCH)
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_PASSING_LOOP:
+			resolutions.append(_module_applied(m, "attached_as_main_loop"))
+		elif m == MODULE_STORAGE_SIDING:
+			resolutions.append(_module_applied(m, "attached_as_wayside_siding"))
+		elif m == MODULE_OUTBOUND_BRANCH:
+			resolutions.append(_module_applied(m, "attached_outbound_rural_branch"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	if has_branch:
+		nodes.append({"id": "branch_exit", "type": "EXIT"})
+
+	if not has_loop and not has_storage:
+		# Plain through: single segment (or branch switch if outbound branch requested).
+		if has_branch:
+			nodes.insert(1, {"id": "rural_junction_switch", "type": "SWITCH"})
+			edges.append({"id": TRACK_RURAL_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "rural_junction_switch", "bidirectional": true})
+			edges.append({"id": TRACK_RURAL_EXIT_MAIN, "role": "THROUGH_MAIN", "from": "rural_junction_switch", "to": "exit", "bidirectional": true})
+			edges.append({"id": TRACK_RURAL_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "rural_junction_switch", "to": "branch_exit", "bidirectional": true})
+		else:
+			edges.append({"id": TRACK_RURAL_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "exit", "bidirectional": true})
+	elif has_loop and not has_storage:
+		# Passing loop variant: adds loop switches.
+		nodes.insert(1, {"id": "rural_west_switch", "type": "SWITCH"})
+		nodes.insert(2, {"id": "rural_east_switch", "type": "SWITCH"})
+		edges.append({"id": TRACK_RURAL_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "rural_west_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_STATION_MAIN, "role": "PLATFORM_TRACK", "from": "rural_west_switch", "to": "rural_east_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_LOOP, "role": "PASSING_LOOP", "from": "rural_west_switch", "to": "rural_east_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_EXIT_MAIN, "role": "THROUGH_MAIN", "from": "rural_east_switch", "to": "exit", "bidirectional": true})
+		if has_branch:
+			edges.append({"id": TRACK_RURAL_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "rural_east_switch", "to": "branch_exit", "bidirectional": true})
+	elif has_storage and not has_loop:
+		# Storage siding variant: switch plus buffer stop.
+		nodes.insert(1, {"id": "rural_storage_switch", "type": "SWITCH"})
+		nodes.append({"id": "rural_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_RURAL_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "rural_storage_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_EXIT_MAIN, "role": "THROUGH_MAIN", "from": "rural_storage_switch", "to": "exit", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_STORAGE, "role": "STORAGE_TRACK", "from": "rural_storage_switch", "to": "rural_storage_buffer", "bidirectional": true})
+		if has_branch:
+			edges.append({"id": TRACK_RURAL_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "rural_storage_switch", "to": "branch_exit", "bidirectional": true})
+	else:
+		# Both loop and storage: loop switches plus storage off west switch.
+		nodes.insert(1, {"id": "rural_west_switch", "type": "SWITCH"})
+		nodes.insert(2, {"id": "rural_east_switch", "type": "SWITCH"})
+		nodes.append({"id": "rural_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_RURAL_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "rural_west_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_STATION_MAIN, "role": "PLATFORM_TRACK", "from": "rural_west_switch", "to": "rural_east_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_LOOP, "role": "PASSING_LOOP", "from": "rural_west_switch", "to": "rural_east_switch", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_EXIT_MAIN, "role": "THROUGH_MAIN", "from": "rural_east_switch", "to": "exit", "bidirectional": true})
+		edges.append({"id": TRACK_RURAL_STORAGE, "role": "STORAGE_TRACK", "from": "rural_west_switch", "to": "rural_storage_buffer", "bidirectional": true})
+		if has_branch:
+			edges.append({"id": TRACK_RURAL_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "rural_east_switch", "to": "branch_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -273,19 +486,8 @@ func _make_rural_through_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "entry",
 			"exit_node": "exit",
-			"nodes": [
-				{"id": "entry", "type": "ENTRY"},
-				{"id": "exit", "type": "EXIT"},
-			],
-			"edges": [
-				{
-					"id": TRACK_RURAL_MAIN,
-					"role": "THROUGH_MAIN",
-					"from": "entry",
-					"to": "exit",
-					"bidirectional": true,
-				},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
@@ -295,6 +497,7 @@ func _make_rural_through_data(decisions: Dictionary) -> Dictionary:
 
 
 func _make_village_passing_station_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
 	var entities: Array[Dictionary] = [
 		{"id": "station_01", "type": "STATION"},
 		{"id": "platform_01", "type": "PLATFORM"},
@@ -323,6 +526,74 @@ func _make_village_passing_station_data(decisions: Dictionary) -> Dictionary:
 			"to_entity": "station_01",
 		})
 
+	var nodes: Array[Dictionary] = [
+		{"id": "entry", "type": "ENTRY"},
+		{"id": "west_loop_switch", "type": "SWITCH"},
+		{"id": "east_loop_switch", "type": "SWITCH"},
+		{"id": "exit", "type": "EXIT"},
+	]
+	var edges: Array[Dictionary] = [
+		{"id": "approach_main", "role": "THROUGH_MAIN", "from": "entry", "to": "west_loop_switch", "bidirectional": true},
+		{"id": TRACK_STATION_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": TRACK_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": "exit_main", "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "exit", "bidirectional": true},
+	]
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_SHORT_GOODS_SIDING:
+			resolutions.append(_module_applied(m, "attached_to_east_switch"))
+		elif m == MODULE_STORAGE_SIDING:
+			resolutions.append(_module_applied(m, "attached_to_west_switch"))
+		elif m == MODULE_ABANDONED_STUB:
+			resolutions.append(_module_applied(m, "attached_to_east_switch"))
+		elif m == MODULE_OUTBOUND_INDUSTRIAL:
+			resolutions.append(_module_applied(m, "attached_outbound_industrial_corridor"))
+		elif m == MODULE_OUTBOUND_AGRICULTURAL:
+			resolutions.append(_module_applied(m, "attached_outbound_agricultural_corridor"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	# Module: short goods siding off east switch
+	if modules.has(MODULE_SHORT_GOODS_SIDING):
+		nodes.append({"id": "village_yard_switch", "type": "SWITCH"})
+		nodes.append({"id": "village_goods_buffer", "type": "BUFFER_STOP"})
+		nodes.append({"id": "village_headshunt_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_VILLAGE_GOODS_LEAD, "role": "GOODS_YARD_TRACK", "from": "east_loop_switch", "to": "village_yard_switch", "bidirectional": true})
+		edges.append({"id": TRACK_VILLAGE_GOODS_LOADING, "role": "LOADING_TRACK", "from": "village_yard_switch", "to": "village_goods_buffer", "bidirectional": true})
+		edges.append({"id": TRACK_VILLAGE_GOODS_HEADSHUNT, "role": "HEADSHUNT", "from": "village_yard_switch", "to": "village_headshunt_buffer", "bidirectional": true})
+		entities.append({"id": "village_goods_shed", "type": "GOODS_YARD"})
+		relations.append({
+			"id": "village_shed_on_loading",
+			"type": "FREIGHT_FACILITY_ON_TRACK",
+			"from_entity": "village_goods_shed",
+			"to_edge": TRACK_VILLAGE_GOODS_LOADING,
+		})
+
+	# Module: storage siding off west switch
+	if modules.has(MODULE_STORAGE_SIDING):
+		nodes.append({"id": "station_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_STATION_STORAGE, "role": "STORAGE_TRACK", "from": "west_loop_switch", "to": "station_storage_buffer", "bidirectional": true})
+
+	# Module: abandoned stub (display only) off east switch
+	if modules.has(MODULE_ABANDONED_STUB):
+		nodes.append({"id": "station_abandoned_joint", "type": "JOINT"})
+		edges.append({"id": TRACK_STATION_ABANDONED_STUB, "role": "ABANDONED_TRACK", "from": "east_loop_switch", "to": "station_abandoned_joint", "bidirectional": true})
+
+	# Module: outbound industrial corridor
+	if modules.has(MODULE_OUTBOUND_INDUSTRIAL):
+		nodes.append({"id": "industrial_exit", "type": "EXIT"})
+		if modules.has(MODULE_SHORT_GOODS_SIDING):
+			edges.append({"id": TRACK_VILLAGE_INDUSTRIAL_EXIT, "role": "BRANCH_LINE", "from": "village_yard_switch", "to": "industrial_exit", "bidirectional": true})
+		else:
+			edges.append({"id": TRACK_VILLAGE_INDUSTRIAL_EXIT, "role": "BRANCH_LINE", "from": "east_loop_switch", "to": "industrial_exit", "bidirectional": true})
+
+	# Module: outbound agricultural corridor
+	if modules.has(MODULE_OUTBOUND_AGRICULTURAL):
+		nodes.append({"id": "agricultural_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_VILLAGE_AGRICULTURAL_EXIT, "role": "BRANCH_LINE", "from": "east_loop_switch", "to": "agricultural_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -331,42 +602,8 @@ func _make_village_passing_station_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "entry",
 			"exit_node": "exit",
-			"nodes": [
-				{"id": "entry", "type": "ENTRY"},
-				{"id": "west_loop_switch", "type": "SWITCH"},
-				{"id": "east_loop_switch", "type": "SWITCH"},
-				{"id": "exit", "type": "EXIT"},
-			],
-			"edges": [
-				{
-					"id": "approach_main",
-					"role": "THROUGH_MAIN",
-					"from": "entry",
-					"to": "west_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_STATION_MAIN,
-					"role": "PLATFORM_TRACK",
-					"from": "west_loop_switch",
-					"to": "east_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_PASSING_LOOP,
-					"role": "PASSING_LOOP",
-					"from": "west_loop_switch",
-					"to": "east_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": "exit_main",
-					"role": "THROUGH_MAIN",
-					"from": "east_loop_switch",
-					"to": "exit",
-					"bidirectional": true,
-				},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
@@ -376,6 +613,7 @@ func _make_village_passing_station_data(decisions: Dictionary) -> Dictionary:
 
 
 func _make_small_town_goods_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
 	var entities: Array[Dictionary] = [
 		{"id": "town_station", "type": "STATION"},
 		{"id": "town_platform", "type": "PLATFORM"},
@@ -418,6 +656,73 @@ func _make_small_town_goods_data(decisions: Dictionary) -> Dictionary:
 			"to_entity": "goods_shed",
 		})
 
+	var nodes: Array[Dictionary] = [
+		{"id": "entry", "type": "ENTRY"},
+		{"id": "west_loop_switch", "type": "SWITCH"},
+		{"id": "east_loop_switch", "type": "SWITCH"},
+		{"id": "yard_switch", "type": "SWITCH"},
+		{"id": "exit", "type": "EXIT"},
+		{"id": "goods_buffer", "type": "BUFFER_STOP"},
+		{"id": "headshunt_buffer", "type": "BUFFER_STOP"},
+	]
+	var edges: Array[Dictionary] = [
+		{"id": TRACK_APPROACH_MAIN, "role": "THROUGH_MAIN", "from": "entry", "to": "west_loop_switch", "bidirectional": true},
+		{"id": TRACK_PLATFORM_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": TRACK_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": TRACK_EXIT_MAIN, "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "exit", "bidirectional": true},
+		{"id": TRACK_GOODS_YARD_LEAD, "role": "GOODS_YARD_TRACK", "from": "west_loop_switch", "to": "yard_switch", "bidirectional": true},
+		{"id": TRACK_GOODS_LOADING, "role": "LOADING_TRACK", "from": "yard_switch", "to": "goods_buffer", "bidirectional": true},
+		{"id": TRACK_YARD_HEADSHUNT, "role": "HEADSHUNT", "from": "yard_switch", "to": "headshunt_buffer", "bidirectional": true},
+	]
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_EXTRA_STORAGE:
+			resolutions.append(_module_applied(m, "attached_to_yard_switch"))
+		elif m == MODULE_INDUSTRIAL_SPUR:
+			resolutions.append(_module_applied(m, "attached_to_yard_switch"))
+		elif m == MODULE_ABANDONED_REMNANT:
+			resolutions.append(_module_applied(m, "attached_to_yard_switch"))
+		elif m == MODULE_OUTBOUND_INDUSTRIAL:
+			resolutions.append(_module_applied(m, "attached_outbound_industrial_corridor"))
+		elif m == MODULE_OUTBOUND_AGRICULTURAL:
+			resolutions.append(_module_applied(m, "attached_outbound_agricultural_corridor"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	# Module: extra storage siding in the yard
+	if modules.has(MODULE_EXTRA_STORAGE):
+		nodes.append({"id": "extra_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_EXTRA_STORAGE, "role": "STORAGE_TRACK", "from": "yard_switch", "to": "extra_storage_buffer", "bidirectional": true})
+
+	# Module: industrial spur off yard switch
+	if modules.has(MODULE_INDUSTRIAL_SPUR):
+		nodes.append({"id": "industrial_spur_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_TOWN_INDUSTRIAL_SPUR, "role": "INDUSTRIAL_SPUR", "from": "yard_switch", "to": "industrial_spur_buffer", "bidirectional": true})
+		entities.append({"id": "town_industry", "type": "INDUSTRY"})
+		relations.append({
+			"id": "industry_on_spur",
+			"type": "FREIGHT_FACILITY_ON_TRACK",
+			"from_entity": "town_industry",
+			"to_edge": TRACK_TOWN_INDUSTRIAL_SPUR,
+		})
+
+	# Module: abandoned remnant (display only)
+	if modules.has(MODULE_ABANDONED_REMNANT):
+		nodes.append({"id": "town_abandoned_joint", "type": "JOINT"})
+		edges.append({"id": TRACK_TOWN_ABANDONED_REMNANT, "role": "ABANDONED_TRACK", "from": "yard_switch", "to": "town_abandoned_joint", "bidirectional": true})
+
+	# Module: outbound industrial corridor off yard
+	if modules.has(MODULE_OUTBOUND_INDUSTRIAL):
+		nodes.append({"id": "industrial_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_TOWN_INDUSTRIAL_EXIT, "role": "BRANCH_LINE", "from": "yard_switch", "to": "industrial_exit", "bidirectional": true})
+
+	# Module: outbound agricultural corridor off east switch
+	if modules.has(MODULE_OUTBOUND_AGRICULTURAL):
+		nodes.append({"id": "agricultural_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_TOWN_AGRICULTURAL_EXIT, "role": "BRANCH_LINE", "from": "east_loop_switch", "to": "agricultural_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -426,66 +731,8 @@ func _make_small_town_goods_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "entry",
 			"exit_node": "exit",
-			"nodes": [
-				{"id": "entry", "type": "ENTRY"},
-				{"id": "west_loop_switch", "type": "SWITCH"},
-				{"id": "east_loop_switch", "type": "SWITCH"},
-				{"id": "yard_switch", "type": "SWITCH"},
-				{"id": "exit", "type": "EXIT"},
-				{"id": "goods_buffer", "type": "BUFFER_STOP"},
-				{"id": "headshunt_buffer", "type": "BUFFER_STOP"},
-			],
-			"edges": [
-				{
-					"id": TRACK_APPROACH_MAIN,
-					"role": "THROUGH_MAIN",
-					"from": "entry",
-					"to": "west_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_PLATFORM_MAIN,
-					"role": "PLATFORM_TRACK",
-					"from": "west_loop_switch",
-					"to": "east_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_PASSING_LOOP,
-					"role": "PASSING_LOOP",
-					"from": "west_loop_switch",
-					"to": "east_loop_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_EXIT_MAIN,
-					"role": "THROUGH_MAIN",
-					"from": "east_loop_switch",
-					"to": "exit",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_GOODS_YARD_LEAD,
-					"role": "GOODS_YARD_TRACK",
-					"from": "west_loop_switch",
-					"to": "yard_switch",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_GOODS_LOADING,
-					"role": "LOADING_TRACK",
-					"from": "yard_switch",
-					"to": "goods_buffer",
-					"bidirectional": true,
-				},
-				{
-					"id": TRACK_YARD_HEADSHUNT,
-					"role": "HEADSHUNT",
-					"from": "yard_switch",
-					"to": "headshunt_buffer",
-					"bidirectional": true,
-				},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
@@ -495,6 +742,7 @@ func _make_small_town_goods_data(decisions: Dictionary) -> Dictionary:
 
 
 func _make_agricultural_loading_point_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
 	var entities: Array[Dictionary] = [
 		{"id": "loading_stop", "type": "STATION"},
 		{"id": "grain_store", "type": "AGRICULTURAL_FACILITY"},
@@ -531,6 +779,54 @@ func _make_agricultural_loading_point_data(decisions: Dictionary) -> Dictionary:
 			"to_entity": "grain_store",
 		})
 
+	var nodes: Array[Dictionary] = [
+		{"id": "west_entry", "type": "ENTRY"},
+		{"id": "spur_switch", "type": "SWITCH"},
+		{"id": "loading_switch", "type": "SWITCH"},
+		{"id": "east_exit", "type": "EXIT"},
+		{"id": "grain_buffer", "type": "BUFFER_STOP"},
+	]
+	var edges: Array[Dictionary] = [
+		{"id": TRACK_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "spur_switch", "bidirectional": true},
+		{"id": TRACK_MAIN_EAST, "role": "THROUGH_MAIN", "from": "spur_switch", "to": "east_exit", "bidirectional": true},
+		{"id": TRACK_AGRICULTURAL_SPUR, "role": "AGRICULTURAL_SPUR", "from": "spur_switch", "to": "loading_switch", "bidirectional": true},
+		{"id": TRACK_GRAIN_LOADING, "role": "LOADING_TRACK", "from": "loading_switch", "to": "grain_buffer", "bidirectional": true},
+	]
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_HEADSHUNT:
+			resolutions.append(_module_applied(m, "attached_to_loading_switch"))
+		elif m == MODULE_STORAGE_SIDING:
+			resolutions.append(_module_applied(m, "attached_to_spur_switch"))
+		elif m == MODULE_EXTRA_LOADING:
+			resolutions.append(_module_applied(m, "attached_to_loading_switch"))
+		elif m == MODULE_OUTBOUND_AGRICULTURAL:
+			resolutions.append(_module_applied(m, "attached_outbound_agricultural_corridor"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	# Module: headshunt / runaround (was always present, now conditional)
+	if modules.has(MODULE_HEADSHUNT):
+		nodes.append({"id": "runaround_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_SHORT_RUNAROUND, "role": "HEADSHUNT", "from": "loading_switch", "to": "runaround_buffer", "bidirectional": true})
+
+	# Module: storage siding off spur switch
+	if modules.has(MODULE_STORAGE_SIDING):
+		nodes.append({"id": "agri_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_AGRI_STORAGE, "role": "STORAGE_TRACK", "from": "spur_switch", "to": "agri_storage_buffer", "bidirectional": true})
+
+	# Module: extra loading track off loading switch
+	if modules.has(MODULE_EXTRA_LOADING):
+		nodes.append({"id": "extra_loading_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_AGRI_EXTRA_LOADING, "role": "LOADING_TRACK", "from": "loading_switch", "to": "extra_loading_buffer", "bidirectional": true})
+
+	# Module: outbound agricultural branch off loading switch
+	if modules.has(MODULE_OUTBOUND_AGRICULTURAL):
+		nodes.append({"id": "agricultural_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_AGRI_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "loading_switch", "to": "agricultural_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -539,21 +835,8 @@ func _make_agricultural_loading_point_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "west_entry",
 			"exit_node": "east_exit",
-			"nodes": [
-				{"id": "west_entry", "type": "ENTRY"},
-				{"id": "spur_switch", "type": "SWITCH"},
-				{"id": "loading_switch", "type": "SWITCH"},
-				{"id": "east_exit", "type": "EXIT"},
-				{"id": "grain_buffer", "type": "BUFFER_STOP"},
-				{"id": "runaround_buffer", "type": "BUFFER_STOP"},
-			],
-			"edges": [
-				{"id": TRACK_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "spur_switch", "bidirectional": true},
-				{"id": TRACK_MAIN_EAST, "role": "THROUGH_MAIN", "from": "spur_switch", "to": "east_exit", "bidirectional": true},
-				{"id": TRACK_AGRICULTURAL_SPUR, "role": "AGRICULTURAL_SPUR", "from": "spur_switch", "to": "loading_switch", "bidirectional": true},
-				{"id": TRACK_GRAIN_LOADING, "role": "LOADING_TRACK", "from": "loading_switch", "to": "grain_buffer", "bidirectional": true},
-				{"id": TRACK_SHORT_RUNAROUND, "role": "HEADSHUNT", "from": "loading_switch", "to": "runaround_buffer", "bidirectional": true},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
@@ -563,6 +846,7 @@ func _make_agricultural_loading_point_data(decisions: Dictionary) -> Dictionary:
 
 
 func _make_river_valley_constrained_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
 	var entities: Array[Dictionary] = [
 		{"id": "valley_station", "type": "STATION"},
 		{"id": "valley_platform", "type": "PLATFORM"},
@@ -598,6 +882,41 @@ func _make_river_valley_constrained_data(decisions: Dictionary) -> Dictionary:
 			"to_entity": "valley_station",
 		})
 
+	var nodes: Array[Dictionary] = [
+		{"id": "west_entry", "type": "ENTRY"},
+		{"id": "west_loop_switch", "type": "SWITCH"},
+		{"id": "east_loop_switch", "type": "SWITCH"},
+		{"id": "bridge_joint", "type": "JOINT"},
+		{"id": "east_exit", "type": "EXIT"},
+	]
+	var edges: Array[Dictionary] = [
+		{"id": TRACK_VALLEY_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "west_loop_switch", "bidirectional": true, "abstract_hint": "cutting"},
+		{"id": TRACK_VALLEY_PLATFORM_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true, "abstract_hint": "short_platform"},
+		{"id": TRACK_SHORT_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true, "abstract_hint": "space_constrained"},
+		{"id": TRACK_CREEK_BRIDGE_MAIN, "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "bridge_joint", "bidirectional": true, "abstract_hint": "bridge"},
+		{"id": TRACK_VALLEY_MAIN_EAST, "role": "THROUGH_MAIN", "from": "bridge_joint", "to": "east_exit", "bidirectional": true, "abstract_hint": "embankment"},
+	]
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_STORAGE_SIDING:
+			resolutions.append(_module_applied(m, "attached_to_west_switch"))
+		elif m == MODULE_OUTBOUND_BRANCH:
+			resolutions.append(_module_applied(m, "attached_outbound_valley_branch"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	# Module: short constrained storage siding off west switch
+	if modules.has(MODULE_STORAGE_SIDING):
+		nodes.append({"id": "valley_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_VALLEY_STORAGE, "role": "STORAGE_TRACK", "from": "west_loop_switch", "to": "valley_storage_buffer", "bidirectional": true})
+
+	# Module: outbound high valley branch off east switch
+	if modules.has(MODULE_OUTBOUND_BRANCH):
+		nodes.append({"id": "valley_branch_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_VALLEY_BRANCH_EXIT, "role": "BRANCH_LINE", "from": "east_loop_switch", "to": "valley_branch_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -606,20 +925,8 @@ func _make_river_valley_constrained_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "west_entry",
 			"exit_node": "east_exit",
-			"nodes": [
-				{"id": "west_entry", "type": "ENTRY"},
-				{"id": "west_loop_switch", "type": "SWITCH"},
-				{"id": "east_loop_switch", "type": "SWITCH"},
-				{"id": "bridge_joint", "type": "JOINT"},
-				{"id": "east_exit", "type": "EXIT"},
-			],
-			"edges": [
-				{"id": TRACK_VALLEY_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "west_loop_switch", "bidirectional": true, "abstract_hint": "cutting"},
-				{"id": TRACK_VALLEY_PLATFORM_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true, "abstract_hint": "short_platform"},
-				{"id": TRACK_SHORT_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true, "abstract_hint": "space_constrained"},
-				{"id": TRACK_CREEK_BRIDGE_MAIN, "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "bridge_joint", "bidirectional": true, "abstract_hint": "bridge"},
-				{"id": TRACK_VALLEY_MAIN_EAST, "role": "THROUGH_MAIN", "from": "bridge_joint", "to": "east_exit", "bidirectional": true, "abstract_hint": "embankment"},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
@@ -629,6 +936,7 @@ func _make_river_valley_constrained_data(decisions: Dictionary) -> Dictionary:
 
 
 func _make_declining_abandoned_branch_data(decisions: Dictionary) -> Dictionary:
+	var modules := _get_modules(decisions)
 	var entities: Array[Dictionary] = [
 		{"id": "branch_station", "type": "STATION"},
 		{"id": "branch_platform", "type": "PLATFORM"},
@@ -664,6 +972,54 @@ func _make_declining_abandoned_branch_data(decisions: Dictionary) -> Dictionary:
 			"to_edge": TRACK_ABANDONED_LOADING_TRACK,
 		})
 
+	var nodes: Array[Dictionary] = [
+		{"id": "west_entry", "type": "ENTRY"},
+		{"id": "west_loop_switch", "type": "SWITCH"},
+		{"id": "east_loop_switch", "type": "SWITCH"},
+		{"id": "old_yard_switch", "type": "SWITCH"},
+		{"id": "east_exit", "type": "EXIT"},
+		{"id": "old_goods_buffer", "type": "BUFFER_STOP"},
+		{"id": "overgrown_buffer", "type": "BUFFER_STOP"},
+		{"id": "removed_track_stub", "type": "JOINT"},
+	]
+	var edges: Array[Dictionary] = [
+		{"id": TRACK_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "west_loop_switch", "bidirectional": true},
+		{"id": TRACK_WORN_PLATFORM_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": TRACK_RUSTY_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
+		{"id": TRACK_MAIN_EAST, "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "east_exit", "bidirectional": true},
+		{"id": TRACK_OLD_GOODS_LEAD, "role": "GOODS_YARD_TRACK", "from": "west_loop_switch", "to": "old_yard_switch", "bidirectional": true},
+		{"id": TRACK_ABANDONED_LOADING_TRACK, "role": "ABANDONED_TRACK", "from": "old_yard_switch", "to": "old_goods_buffer", "bidirectional": true},
+		{"id": TRACK_OVERGROWN_STORAGE, "role": "STORAGE_TRACK", "from": "old_yard_switch", "to": "overgrown_buffer", "bidirectional": true},
+		{"id": TRACK_REMOVED_BRANCH_STUB, "role": "ABANDONED_TRACK", "from": "old_yard_switch", "to": "removed_track_stub", "bidirectional": true},
+	]
+
+	var resolutions: Array[Dictionary] = []
+	for m in modules:
+		if m == MODULE_EXTRA_ABANDONED:
+			resolutions.append(_module_applied(m, "attached_to_old_yard_switch"))
+		elif m == MODULE_ACTIVE_STORAGE:
+			resolutions.append(_module_applied(m, "attached_to_old_yard_switch"))
+		elif m == MODULE_OUTBOUND_INDUSTRIAL:
+			resolutions.append(_module_applied(m, "attached_outbound_freight_corridor"))
+		else:
+			resolutions.append(_module_skipped(m, "unsupported_by_archetype"))
+	decisions["module_resolutions"] = resolutions
+
+	# Module: extra abandoned remnant off old yard
+	if modules.has(MODULE_EXTRA_ABANDONED):
+		nodes.append({"id": "extra_abandoned_joint", "type": "JOINT"})
+		edges.append({"id": TRACK_BRANCH_EXTRA_ABANDONED, "role": "ABANDONED_TRACK", "from": "old_yard_switch", "to": "extra_abandoned_joint", "bidirectional": true})
+
+	# Module: active storage siding among the decay
+	if modules.has(MODULE_ACTIVE_STORAGE):
+		nodes.append({"id": "branch_active_storage_buffer", "type": "BUFFER_STOP"})
+		edges.append({"id": TRACK_BRANCH_ACTIVE_STORAGE, "role": "STORAGE_TRACK", "from": "old_yard_switch", "to": "branch_active_storage_buffer", "bidirectional": true})
+
+	# Module: outbound freight corridor off old yard switch
+	if modules.has(MODULE_OUTBOUND_INDUSTRIAL):
+		nodes.append({"id": "freight_exit", "type": "EXIT"})
+		edges.append({"id": TRACK_BRANCH_FREIGHT_EXIT, "role": "BRANCH_LINE", "from": "old_yard_switch", "to": "freight_exit", "bidirectional": true})
+
 	return {
 		"grammar_version": GRAMMAR_VERSION,
 		"generator_version": LEGACY_BLUEPRINT_GENERATOR_VERSION,
@@ -672,31 +1028,42 @@ func _make_declining_abandoned_branch_data(decisions: Dictionary) -> Dictionary:
 		"rail_graph": {
 			"entry_node": "west_entry",
 			"exit_node": "east_exit",
-			"nodes": [
-				{"id": "west_entry", "type": "ENTRY"},
-				{"id": "west_loop_switch", "type": "SWITCH"},
-				{"id": "east_loop_switch", "type": "SWITCH"},
-				{"id": "old_yard_switch", "type": "SWITCH"},
-				{"id": "east_exit", "type": "EXIT"},
-				{"id": "old_goods_buffer", "type": "BUFFER_STOP"},
-				{"id": "overgrown_buffer", "type": "BUFFER_STOP"},
-				{"id": "removed_track_stub", "type": "JOINT"},
-			],
-			"edges": [
-				{"id": TRACK_MAIN_WEST, "role": "THROUGH_MAIN", "from": "west_entry", "to": "west_loop_switch", "bidirectional": true},
-				{"id": TRACK_WORN_PLATFORM_MAIN, "role": "PLATFORM_TRACK", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
-				{"id": TRACK_RUSTY_PASSING_LOOP, "role": "PASSING_LOOP", "from": "west_loop_switch", "to": "east_loop_switch", "bidirectional": true},
-				{"id": TRACK_MAIN_EAST, "role": "THROUGH_MAIN", "from": "east_loop_switch", "to": "east_exit", "bidirectional": true},
-				{"id": TRACK_OLD_GOODS_LEAD, "role": "GOODS_YARD_TRACK", "from": "west_loop_switch", "to": "old_yard_switch", "bidirectional": true},
-				{"id": TRACK_ABANDONED_LOADING_TRACK, "role": "ABANDONED_TRACK", "from": "old_yard_switch", "to": "old_goods_buffer", "bidirectional": true},
-				{"id": TRACK_OVERGROWN_STORAGE, "role": "STORAGE_TRACK", "from": "old_yard_switch", "to": "overgrown_buffer", "bidirectional": true},
-				{"id": TRACK_REMOVED_BRANCH_STUB, "role": "ABANDONED_TRACK", "from": "old_yard_switch", "to": "removed_track_stub", "bidirectional": true},
-			],
+			"nodes": nodes,
+			"edges": edges,
 		},
 		"world_graph": {
 			"entities": entities,
 			"relations": relations,
 		},
+	}
+
+
+# ---- Helpers ----
+
+func _get_modules(decisions: Dictionary) -> Array:
+	var raw = decisions.get("modules", [])
+	if raw is Array:
+		return raw
+	return []
+
+
+func _module_applied(module_id: String, reason: String) -> Dictionary:
+	return {
+		"module_requested": module_id,
+		"module": module_id,
+		"status": MODULE_STATUS_APPLIED,
+		"applied_reason": reason,
+		"reason": reason,
+	}
+
+
+func _module_skipped(module_id: String, reason: String) -> Dictionary:
+	return {
+		"module_requested": module_id,
+		"module": module_id,
+		"status": MODULE_STATUS_SKIPPED,
+		"skip_reason": reason,
+		"reason": reason,
 	}
 
 
@@ -718,7 +1085,7 @@ func _make_trace(context: RefCounted, decisions: Dictionary, prior_trace: RefCou
 
 func _decision_stream(key: String) -> String:
 	match key:
-		"platform_track":
+		"platform_track", "modules", "module_resolutions":
 			return WorldgenGenerationContext.STREAM_TOPOLOGY
 		_:
 			return WorldgenGenerationContext.STREAM_WORLD_ENTITIES

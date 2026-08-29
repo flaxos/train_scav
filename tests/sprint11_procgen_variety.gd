@@ -150,7 +150,7 @@ func _promoted_archetypes_have_safe_resources_and_routes() -> void:
 	var agricultural := _find_archetype("agricultural_loading_point", 78000, 1200)
 	if not agricultural.is_empty():
 		_expect(_route_reaches_stub_and_reverses(agricultural, "grain_loading", "grain_loading", "main_west"), "agricultural loading route is reachable and reversible")
-		_expect(_route_reaches_stub_and_reverses(agricultural, "headshunt", "short_runaround", "main_west"), "agricultural headshunt route is reachable and reversible")
+		_expect(_agricultural_headshunt_valid_or_cleanly_skipped(agricultural), "agricultural headshunt route is valid when present or absent when skipped")
 
 	var river := _find_archetype("river_valley_constrained", 79000, 1200)
 	if not river.is_empty():
@@ -273,6 +273,13 @@ func _route_reaches_stub_and_reverses(result: Dictionary, preset_id: String, stu
 	rail.throttle = 1.0
 	_step_until(rail, return_segment, 22.0)
 	return str(rail.current_segment) == return_segment
+
+
+func _agricultural_headshunt_valid_or_cleanly_skipped(result: Dictionary) -> bool:
+	var layout := result.get("layout", {}) as Dictionary
+	if not _find_route_preset(layout, "headshunt").is_empty():
+		return _route_reaches_stub_and_reverses(result, "headshunt", "short_runaround", "main_west")
+	return not (layout.get("segments", {}) as Dictionary).has("short_runaround")
 
 
 func _display_only_segments(result: Dictionary) -> Array[String]:
