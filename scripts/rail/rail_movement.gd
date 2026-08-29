@@ -504,8 +504,6 @@ func set_powered_unit_condition(unit_id: String, condition: String) -> bool:
 func get_powered_unit_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for unit_id in active_units:
-		if unit_id != controlled_power_unit_id:
-			continue
 		if not is_powered_unit(unit_id):
 			continue
 		if get_powered_unit_condition(unit_id) != CONDITION_OPERATIONAL:
@@ -514,8 +512,37 @@ func get_powered_unit_ids() -> Array[String]:
 	return ids
 
 
+func get_operational_powered_unit_ids() -> Array[String]:
+	return get_powered_unit_ids()
+
+
 func has_traction_authority() -> bool:
-	return not get_powered_unit_ids().is_empty()
+	if controlled_power_unit_id == "":
+		return false
+	if not active_units.has(controlled_power_unit_id):
+		return false
+	if not is_powered_unit(controlled_power_unit_id):
+		return false
+	if get_powered_unit_condition(controlled_power_unit_id) != CONDITION_OPERATIONAL:
+		return false
+	return true
+
+
+func get_unit_traction(unit_id: String) -> float:
+	if not is_powered_unit(unit_id):
+		return 0.0
+	if get_powered_unit_condition(unit_id) != CONDITION_OPERATIONAL:
+		return 0.0
+	return RollingStockCatalog.get_traction_rating_for_unit(unit_id, unit_type_overrides)
+
+
+func get_available_traction() -> float:
+	if not has_traction_authority():
+		return 0.0
+	var total := 0.0
+	for unit_id in active_units:
+		total += get_unit_traction(unit_id)
+	return total
 
 
 func select_powered_control(unit_id: String) -> bool:
@@ -666,12 +693,16 @@ func get_total_length() -> float:
 
 
 func get_mobility_summary() -> Dictionary:
+	var operational_powered := get_operational_powered_unit_ids()
 	return {
 		"total_mass": get_total_mass(),
 		"total_length": get_total_length(),
 		"unit_count": active_units.size(),
 		"has_traction": has_traction_authority(),
+		"traction": get_available_traction(),
 		"powered_unit_id": str(controlled_power_unit_id),
+		"powered_units": operational_powered,
+		"operational_loco_count": operational_powered.size(),
 		"capabilities": get_train_capabilities(),
 	}
 
@@ -1156,7 +1187,8 @@ func _update_speed(delta: float, brake_active: bool) -> void:
 		speed = move_toward(speed, 0.0, coast_deceleration * delta)
 		return
 
-	var mass_factor := clampf(150.0 / maxf(get_total_mass(), 1.0), 0.45, 1.1)
+	var effective_mass := get_total_mass() / maxf(get_available_traction(), 1.0)
+	var mass_factor := clampf(150.0 / maxf(effective_mass, 1.0), 0.45, 1.1)
 	var target_speed := throttle * max_speed * mass_factor
 	var rate := acceleration * mass_factor
 	if target_speed < speed:

@@ -153,6 +153,16 @@ static func present_route_option(exit_def: Dictionary, mobility: Dictionary, act
 		if not missing_caps.has(cap):
 			reasons.append("Requires %s ✓" % _friendly_capability_name(str(cap)))
 
+	var min_traction := float(details.get("min_traction", 0.0))
+	var available_traction := float(mobility.get("traction", 1.0 if has_traction else 0.0))
+	if min_traction > 1.0:
+		if available_traction < min_traction:
+			reasons.append("Traction required: %.0f units (Train: %.0f)" % [min_traction, available_traction])
+			if action_hint == "":
+				action_hint = "Recover and couple a second operational locomotive/shunter."
+		else:
+			reasons.append("Traction required: %.0f units (Train: %.0f ✓)" % [min_traction, available_traction])
+
 	if require_traction and not has_traction:
 		reasons.append("Requires crewed operational locomotive")
 		if action_hint == "":
@@ -420,8 +430,9 @@ static func format_player_status_panel(
 	var total_mass := float(mobility.get("total_mass", 0.0))
 	var unit_count := int(mobility.get("unit_count", 0))
 	var driver_text := "Driver aboard ✓" if has_driver else "No driver ✕"
-	lines.append("Consist: %s (%.1ft, %d units)  Control: %s: (%s)" % [
-		consist_summary, total_mass, unit_count, controlled_power_id, driver_text
+	var traction := float(mobility.get("traction", 1.0 if mobility.get("has_traction", false) else 0.0))
+	lines.append("Consist: %s (%.1ft, %d units)  Traction: %.0f  Control: %s: (%s)" % [
+		consist_summary, total_mass, unit_count, traction, controlled_power_id, driver_text
 	])
 
 	# Line 2: Movement

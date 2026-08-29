@@ -6,6 +6,7 @@ const KEY_MIN_MASS := "min_mass"
 const KEY_MAX_LENGTH := "max_length"
 const KEY_MAX_UNITS := "max_units"
 const KEY_REQUIRE_TRACTION := "require_traction"
+const KEY_MIN_TRACTION := "min_traction"
 const KEY_REQUIRED_CAPABILITIES := "required_capabilities"
 
 
@@ -21,13 +22,27 @@ static func evaluate(mobility_summary: Dictionary, requirements: Dictionary, rou
 			"details": details,
 		}
 
-	# 1. Traction authority check
+	# 1. Traction authority & quantity check
 	var require_traction := bool(requirements.get(KEY_REQUIRE_TRACTION, true))
 	var has_traction := bool(mobility_summary.get("has_traction", false))
+	var available_traction := float(mobility_summary.get("traction", 1.0 if has_traction else 0.0))
+	var min_traction := float(requirements.get(KEY_MIN_TRACTION, 0.0))
+	if min_traction <= 0.0 and typeof(requirements.get(KEY_REQUIRE_TRACTION)) in [TYPE_INT, TYPE_FLOAT]:
+		min_traction = float(requirements.get(KEY_REQUIRE_TRACTION))
+
 	details["require_traction"] = require_traction
 	details["has_traction"] = has_traction
+	details["min_traction"] = min_traction
+	details["available_traction"] = available_traction
+
 	if require_traction and not has_traction:
 		blocked_reasons.append("Departure blocked: Train has no operational traction authority")
+	elif min_traction > 0.0 and available_traction < min_traction:
+		blocked_reasons.append("Departure blocked: %s requires %.0f traction units (train has %.0f)" % [
+			route_label,
+			min_traction,
+			available_traction,
+		])
 
 	# 2. Maximum mass check
 	var max_mass := float(requirements.get(KEY_MAX_MASS, 0.0))
@@ -121,6 +136,9 @@ static func format_requirements_summary(requirements: Dictionary) -> String:
 	var req_caps: Array = requirements.get(KEY_REQUIRED_CAPABILITIES, []) as Array
 	for cap in req_caps:
 		parts.append("Req %s" % str(cap))
+	var min_tr := float(requirements.get(KEY_MIN_TRACTION, 0.0))
+	if min_tr > 1.0:
+		parts.append("Min %.0f traction" % min_tr)
 	if not bool(requirements.get(KEY_REQUIRE_TRACTION, true)):
 		parts.append("No traction req")
 

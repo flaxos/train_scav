@@ -35,6 +35,7 @@ const _DEFINITIONS := {
 		"length": 64.0,
 		"mass": 90.0,
 		"powered": true,
+		"traction_rating": 1.0,
 		"boardable": true,
 		"interior_kind": INTERIOR_LOCOMOTIVE,
 		"interior_label": "LOCOMOTIVE",
@@ -56,6 +57,7 @@ const _DEFINITIONS := {
 		"length": 54.0,
 		"mass": 62.0,
 		"powered": true,
+		"traction_rating": 1.0,
 		"boardable": true,
 		"interior_kind": INTERIOR_SHUNTER,
 		"interior_label": "SHUNTER",
@@ -66,7 +68,7 @@ const _DEFINITIONS := {
 			RESOURCE_FOOD: 0.0,
 			RESOURCE_PARTS: 0.0,
 		},
-		"capabilities": ["yard_power", "control_cab", "powered", "boardable"],
+		"capabilities": ["traction", "yard_power", "control_cab", "powered", "boardable"],
 		"salvage_allowed": false,
 		"summary": "Small powered shunter cab for yard work; not procedural Sprint 10 salvage.",
 	},
@@ -279,3 +281,10 @@ static func get_salvage_type_ids() -> Array[String]:
 		if bool(definition.get("salvage_allowed", false)):
 			ids.append(type_id)
 	return ids
+
+
+static func get_traction_rating_for_unit(unit_id: String, explicit_type_map: Dictionary = {}) -> float:
+	var definition := get_definition_for_unit(unit_id, explicit_type_map)
+	if not bool(definition.get("powered", false)):
+		return 0.0
+	return float(definition.get("traction_rating", 1.0))
