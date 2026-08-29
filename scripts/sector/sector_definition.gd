@@ -40,6 +40,7 @@ var route_presets: Array[Dictionary] = []
 var poi_definitions: Array[Dictionary] = []
 var detached_consists: Array[Dictionary] = []
 var rolling_stock_units: Dictionary = {}
+var hazard_definitions: Array[Dictionary] = []
 var worldgen_summary: Dictionary = {}
 
 
@@ -94,12 +95,17 @@ static func from_procedural_result(result: Dictionary) -> SectorDefinition:
 	def.poi_definitions.assign((result.get("poi_definitions", []) as Array).duplicate(true))
 	def.detached_consists.assign((result.get("detached_consists", []) as Array).duplicate(true))
 	def.rolling_stock_units = (result.get("rolling_stock_units", {}) as Dictionary).duplicate(true)
+	def.hazard_definitions.assign((result.get("hazard_definitions", []) as Array).duplicate(true))
 	def.worldgen_summary = (result.get("summary", {}) as Dictionary).duplicate(true)
 	def.entry_segment = str(def.runtime_layout.get("entry_segment", ""))
 	def.entry_distance = float(def.runtime_layout.get("entry_distance", 0.0))
 	def.exit_segment = str(def.runtime_layout.get("exit_segment", ""))
 	def.exit_distance = float(def.runtime_layout.get("exit_distance", 0.0))
-	def.route_exits = _create_generated_route_exits(def.exit_segment, def.exit_distance)
+	var custom_exits := result.get("route_exits", []) as Array
+	if not custom_exits.is_empty():
+		def.route_exits.assign(custom_exits.duplicate(true))
+	else:
+		def.route_exits = _create_generated_route_exits(def.exit_segment, def.exit_distance)
 	def.template_name = _template_name_for_archetype(def.archetype_id)
 	def.display_name = "Sector %d: %s" % [def.sector_index, _display_name_for_archetype(def.archetype_id)]
 	def.entry_label = "Sector %d procedural entry" % def.sector_index
@@ -131,6 +137,7 @@ func get_worldgen_debug_state() -> Dictionary:
 		"poi_signature": poi_signature,
 		"rolling_stock_signature": rolling_stock_signature,
 		"rolling_stock_units": rolling_stock_units.duplicate(true),
+		"hazard_definitions": hazard_definitions.duplicate(true),
 	}
 
 

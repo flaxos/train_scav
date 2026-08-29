@@ -101,6 +101,9 @@ func generate_sector_from_context(context: RefCounted) -> Dictionary:
 	var rolling_stock := _make_detached_rolling_stock(archetype_id, context, layout)
 	var detached_consists := rolling_stock.get("detached_consists", []) as Array
 	var rolling_stock_units := rolling_stock.get("rolling_stock_units", {}) as Dictionary
+	var hazards_and_routes := _make_hazards_and_routes(archetype_id, context, layout)
+	var hazard_definitions := hazards_and_routes.get("hazard_definitions", []) as Array
+	var route_exits := hazards_and_routes.get("route_exits", []) as Array
 	var canonical := WorldgenCanonical.new()
 	var result := {
 		"success": true,
@@ -129,6 +132,8 @@ func generate_sector_from_context(context: RefCounted) -> Dictionary:
 			"detached_consists": detached_consists,
 			"rolling_stock_units": rolling_stock_units,
 		}),
+		"hazard_definitions": hazard_definitions,
+		"route_exits": route_exits,
 		"summary": {
 			"archetype_id": archetype_id,
 			"semantic_decisions": (semantic_result.get("decisions", {}) as Dictionary).duplicate(true),
@@ -286,6 +291,182 @@ func _failure_with_diagnostics(diagnostics: Array) -> Dictionary:
 	return {
 		"success": false,
 		"diagnostics": diagnostics.duplicate(true),
+	}
+
+
+func _make_hazards_and_routes(archetype_id: String, context: RefCounted, layout: Dictionary) -> Dictionary:
+	var problem_rng: RefCounted = context.make_rng(WorldgenGenerationContext.STREAM_GAMEPLAY_PROBLEM)
+	var hazard_definitions: Array[Dictionary] = []
+	var route_exits: Array[Dictionary] = []
+
+	var exit_segment := str(layout.get("exit_segment", ""))
+	var exit_distance := float(layout.get("exit_distance", 0.0))
+	var points := layout.get("points", {}) as Dictionary
+
+	match archetype_id:
+		WorldgenSemanticGenerator.ARCHETYPE_RIVER_VALLEY_CONSTRAINED:
+			var bridge_variant := int(problem_rng.range_int(0, 1)) if problem_rng != null else 0
+			var bridge_segment := WorldgenSemanticGenerator.TRACK_CREEK_BRIDGE_MAIN
+			if bridge_variant == 0:
+				route_exits.append({
+					"id": "creek_bridge_exit",
+					"route_id": "bridge",
+					"label": "Creek Bridge route",
+					"summary": "Direct route across the creek bridge (240t mass limit).",
+					"profile": "forward",
+					"segment": exit_segment,
+					"distance": exit_distance,
+					"requirements": {
+						"require_traction": true,
+						"max_mass": 240.0,
+					},
+				})
+			else:
+				hazard_definitions.append({
+					"id": "hazard_creek_bridge",
+					"type": "track",
+					"target_id": bridge_segment,
+					"condition": "damaged",
+					"name": "Damaged Creek Bridge",
+				})
+				route_exits.append({
+					"id": "creek_bridge_exit",
+					"route_id": "bridge",
+					"label": "Creek Bridge route",
+					"summary": "Direct route across the creek bridge (requires track repair).",
+					"profile": "forward",
+					"segment": exit_segment,
+					"distance": exit_distance,
+					"requirements": {
+						"require_traction": true,
+						"required_segments_operational": [bridge_segment],
+					},
+				})
+
+		WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION:
+			var switch_id := "west_loop_switch"
+			if points.has(switch_id):
+				hazard_definitions.append({
+					"id": "hazard_west_switch",
+					"type": "point",
+					"target_id": switch_id,
+					"condition": "damaged",
+					"name": "Jammed West Turnout",
+				})
+			route_exits.append({
+				"id": "village_exit",
+				"route_id": "forward",
+				"label": "Main Departure route",
+				"summary": "Continue past the village passing station.",
+				"profile": "forward",
+				"segment": exit_segment,
+				"distance": exit_distance,
+				"requirements": {
+					"require_traction": true,
+				},
+			})
+
+		WorldgenSemanticGenerator.ARCHETYPE_DECLINING_ABANDONED_BRANCH:
+			var branch_variant := int(problem_rng.range_int(0, 1)) if problem_rng != null else 0
+			var worn_track := WorldgenSemanticGenerator.TRACK_WORN_PLATFORM_MAIN
+			if branch_variant == 1:
+				hazard_definitions.append({
+					"id": "hazard_worn_track",
+					"type": "track",
+					"target_id": worn_track,
+					"condition": "damaged",
+					"name": "Degraded Branch Platform Track",
+				})
+				route_exits.append({
+					"id": "branch_main_exit",
+					"route_id": "forward",
+					"label": "Branch Exit route",
+					"summary": "Leave the declining branch line.",
+					"profile": "forward",
+					"segment": exit_segment,
+					"distance": exit_distance,
+					"requirements": {
+						"require_traction": true,
+						"required_segments_operational": [worn_track],
+					},
+				})
+			else:
+				route_exits.append({
+					"id": "branch_main_exit",
+					"route_id": "forward",
+					"label": "Branch Exit route",
+					"summary": "Leave the declining branch line.",
+					"profile": "forward",
+					"segment": exit_segment,
+					"distance": exit_distance,
+					"requirements": {
+						"require_traction": true,
+					},
+				})
+
+		WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS:
+			var yard_switch := "goods_yard_switch"
+			if points.has(yard_switch):
+				hazard_definitions.append({
+					"id": "hazard_goods_switch",
+					"type": "point",
+					"target_id": yard_switch,
+					"condition": "damaged",
+					"name": "Jammed Goods Yard Switch",
+				})
+			route_exits.append({
+				"id": "goods_exit",
+				"route_id": "forward",
+				"label": "Goods Yard Departure",
+				"summary": "Continue along the main line.",
+				"profile": "forward",
+				"segment": exit_segment,
+				"distance": exit_distance,
+				"requirements": {
+					"require_traction": true,
+				},
+			})
+
+		WorldgenSemanticGenerator.ARCHETYPE_AGRICULTURAL_LOADING_POINT:
+			var spur_switch := "spur_switch"
+			if points.has(spur_switch):
+				hazard_definitions.append({
+					"id": "hazard_spur_switch",
+					"type": "point",
+					"target_id": spur_switch,
+					"condition": "damaged",
+					"name": "Jammed Agricultural Spur Switch",
+				})
+			route_exits.append({
+				"id": "agricultural_exit",
+				"route_id": "forward",
+				"label": "Agricultural Siding Exit",
+				"summary": "Continue past the grain loading facility.",
+				"profile": "forward",
+				"segment": exit_segment,
+				"distance": exit_distance,
+				"requirements": {
+					"require_traction": true,
+				},
+			})
+
+		_:
+			route_exits.append({
+				"id": "forward_exit",
+				"route_id": "forward",
+				"label": "Procedural forward exit",
+				"summary": "Continue to the next procedural sector.",
+				"profile": "forward",
+				"segment": exit_segment,
+				"distance": exit_distance,
+				"requirements": {
+					"require_traction": true,
+				},
+			})
+
+	return {
+		"hazard_definitions": hazard_definitions,
+		"route_exits": route_exits,
 	}
 
 

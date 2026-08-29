@@ -1451,8 +1451,16 @@ func _draw_departure_confirmation() -> void:
 		MENU_TEXT_COLOR
 	)
 
-	var y := modal_rect.position.y + 62.0
-	for line in departure_confirmation_lines:
+	var lines := _build_departure_confirmation_lines()
+	var y := modal_rect.position.y + 58.0
+	for line in lines:
+		var line_color := MENU_TEXT_COLOR
+		if line.begins_with("⚠️"):
+			line_color = Color(1.0, 0.45, 0.35, 1.0)
+		elif line.begins_with("   Wait"):
+			line_color = Color(0.95, 0.75, 0.3, 1.0)
+		elif line.begins_with("Status: Ready"):
+			line_color = Color(0.35, 0.95, 0.55, 1.0)
 		draw_string(
 			font,
 			Vector2(modal_rect.position.x + 18.0, y),
@@ -1460,11 +1468,14 @@ func _draw_departure_confirmation() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			modal_rect.size.x - 36.0,
 			13,
-			MENU_TEXT_COLOR
+			line_color
 		)
-		y += 20.0
+		y += 18.0
 
-	_draw_departure_button(_get_departure_confirm_rect(), "Yes - leave sector", MODAL_CONFIRM_COLOR)
+	var can_leave: bool = bool(lifecycle != null and lifecycle.can_depart() and (crew == null or crew.are_all_survivors_aboard()))
+	var confirm_btn_label := "Yes - leave sector" if can_leave else "Wait for crew / Blocked"
+	var confirm_btn_color := MODAL_CONFIRM_COLOR if can_leave else Color(0.65, 0.45, 0.25, 0.9)
+	_draw_departure_button(_get_departure_confirm_rect(), confirm_btn_label, confirm_btn_color)
 	_draw_departure_button(_get_departure_cancel_rect(), "No - hard brake", MODAL_CANCEL_COLOR)
 
 
@@ -2819,7 +2830,7 @@ func _get_context_menu_size() -> Vector2:
 
 func _get_departure_modal_rect() -> Rect2:
 	var playfield := get_playfield_rect()
-	var modal_size := Vector2(minf(480.0, playfield.size.x - 48.0), 290.0)
+	var modal_size := Vector2(minf(540.0, playfield.size.x - 48.0), 340.0)
 	return Rect2(playfield.position + (playfield.size - modal_size) * 0.5, modal_size)
 
 
@@ -3070,7 +3081,15 @@ func _build_departure_confirmation_lines() -> Array[String]:
 	lines.append("Departing consist: %s" % rail.get_consist_summary())
 	lines.append("Rolling stock left behind: %s" % rail.get_detached_summary())
 	lines.append("Uncollected POI supplies are abandoned with this sector.")
-	lines.append("Confirm to enter the next sector, or cancel to stop.")
+
+	if crew != null and not crew.are_all_survivors_aboard():
+		var unboarded: Array[String] = crew.get_unboarded_survivor_names()
+		lines.append("⚠️ DEPARTURE BLOCKED: Survivors still in yard (%s)" % ", ".join(unboarded))
+		lines.append("   Wait for survivors to finish boarding before departing.")
+	elif lifecycle != null and not lifecycle.can_depart():
+		lines.append("⚠️ DEPARTURE BLOCKED: %s" % lifecycle.transition_blocked_reason)
+	else:
+		lines.append("Status: Ready to depart. Confirm to enter next sector, or cancel.")
 	return lines
 
 

@@ -8,6 +8,8 @@ const KEY_MAX_UNITS := "max_units"
 const KEY_REQUIRE_TRACTION := "require_traction"
 const KEY_MIN_TRACTION := "min_traction"
 const KEY_REQUIRED_CAPABILITIES := "required_capabilities"
+const KEY_REQUIRED_SEGMENTS_OPERATIONAL := "required_segments_operational"
+const KEY_REQUIRED_SWITCHES_OPERATIONAL := "required_switches_operational"
 
 
 static func evaluate(mobility_summary: Dictionary, requirements: Dictionary, route_label: String = "Route") -> Dictionary:
@@ -106,6 +108,44 @@ static func evaluate(mobility_summary: Dictionary, requirements: Dictionary, rou
 			missing,
 		])
 
+	# 7. Required operational track segments check
+	var req_segments: Array = requirements.get(KEY_REQUIRED_SEGMENTS_OPERATIONAL, []) as Array
+	var damaged_tracks: Array = mobility_summary.get("damaged_tracks", []) as Array
+	var track_conditions: Dictionary = mobility_summary.get("track_conditions", {}) as Dictionary
+	var missing_segments: Array[String] = []
+	for raw_seg in req_segments:
+		var seg := str(raw_seg)
+		if seg == "":
+			continue
+		if damaged_tracks.has(seg) or str(track_conditions.get(seg, "operational")) == "damaged":
+			missing_segments.append(seg)
+	details["required_segments_operational"] = req_segments
+	details["damaged_segments"] = missing_segments
+	for missing_seg in missing_segments:
+		blocked_reasons.append("Departure blocked: %s requires operational track '%s' (currently damaged)" % [
+			route_label,
+			missing_seg,
+		])
+
+	# 8. Required operational switches check
+	var req_switches: Array = requirements.get(KEY_REQUIRED_SWITCHES_OPERATIONAL, []) as Array
+	var damaged_points: Array = mobility_summary.get("damaged_points", []) as Array
+	var point_conditions: Dictionary = mobility_summary.get("point_conditions", {}) as Dictionary
+	var missing_switches: Array[String] = []
+	for raw_sw in req_switches:
+		var sw := str(raw_sw)
+		if sw == "":
+			continue
+		if damaged_points.has(sw) or str(point_conditions.get(sw, "operational")) == "damaged":
+			missing_switches.append(sw)
+	details["required_switches_operational"] = req_switches
+	details["damaged_switches"] = missing_switches
+	for missing_sw in missing_switches:
+		blocked_reasons.append("Departure blocked: %s requires operational switch '%s' (currently damaged / jammed)" % [
+			route_label,
+			missing_sw,
+		])
+
 	var can_take := blocked_reasons.is_empty()
 	var primary := ""
 	if not can_take:
@@ -139,6 +179,12 @@ static func format_requirements_summary(requirements: Dictionary) -> String:
 	var min_tr := float(requirements.get(KEY_MIN_TRACTION, 0.0))
 	if min_tr > 1.0:
 		parts.append("Min %.0f traction" % min_tr)
+	var req_segs: Array = requirements.get(KEY_REQUIRED_SEGMENTS_OPERATIONAL, []) as Array
+	if not req_segs.is_empty():
+		parts.append("Req intact track")
+	var req_sws: Array = requirements.get(KEY_REQUIRED_SWITCHES_OPERATIONAL, []) as Array
+	if not req_sws.is_empty():
+		parts.append("Req intact switches")
 	if not bool(requirements.get(KEY_REQUIRE_TRACTION, true)):
 		parts.append("No traction req")
 

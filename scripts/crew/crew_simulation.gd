@@ -21,6 +21,7 @@ const TASK_REPAIR_SHUNTER := "repair_shunter"
 const TASK_REPAIR_YARD_CONTROL := "repair_yard_control"
 const TASK_CONNECT_POWER := "connect_power"
 const TASK_REPAIR_POINT := "repair_point"
+const TASK_REPAIR_TRACK := "repair_track"
 const TASK_MOVE_ABOARD := "move_aboard"
 const TASK_SEARCH_POI := "search_poi"
 const TASK_HAUL_RESOURCE := "haul_resource"
@@ -488,6 +489,25 @@ func assign_repair_point(survivor_id: String, point_id: String) -> bool:
 		yard.get_repair_anchor("point", point_id),
 		point_id,
 		{"point_id": point_id},
+		repair_interaction_duration
+	)
+
+
+func assign_repair_track(survivor_id: String, segment_id: String) -> bool:
+	if yard == null:
+		var index := _find_survivor_index(survivor_id)
+		if index >= 0:
+			_fail_survivor(index, TASK_REPAIR_TRACK, "No yard system")
+		return false
+
+	return _assign_yard_task(
+		survivor_id,
+		TASK_REPAIR_TRACK,
+		"repair_track",
+		segment_id,
+		yard.get_repair_anchor("track", segment_id),
+		segment_id,
+		{"segment_id": segment_id},
 		repair_interaction_duration
 	)
 
@@ -1114,7 +1134,22 @@ func _execute_task(index: int) -> void:
 				succeeded = false
 				failure_reason = yard.last_status
 			else:
+				if train_resources != null and train_resources.has_method("consume"):
+					train_resources.consume("parts", 1.0)
 				survivor["status_text"] = "Repaired %s" % repair_point_id
+		TASK_REPAIR_TRACK:
+			var repair_data := survivor["task_data"] as Dictionary
+			var segment_id := str(repair_data.get("segment_id", ""))
+			if yard == null:
+				succeeded = false
+				failure_reason = "No yard system"
+			elif not yard.repair_track(segment_id):
+				succeeded = false
+				failure_reason = yard.last_status
+			else:
+				if train_resources != null and train_resources.has_method("consume"):
+					train_resources.consume("parts", 2.0)
+				survivor["status_text"] = "Repaired track %s" % segment_id
 		TASK_SEARCH_POI:
 			var search_data := survivor["task_data"] as Dictionary
 			var poi_id := str(search_data.get("poi_id", ""))

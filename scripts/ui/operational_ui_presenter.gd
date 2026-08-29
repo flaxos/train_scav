@@ -163,6 +163,18 @@ static func present_route_option(exit_def: Dictionary, mobility: Dictionary, act
 		else:
 			reasons.append("Traction required: %.0f units (Train: %.0f ✓)" % [min_traction, available_traction])
 
+	var damaged_segs: Array = details.get("damaged_segments", []) as Array
+	for damaged_seg in damaged_segs:
+		reasons.append("Track section damaged: %s" % str(damaged_seg))
+		if action_hint == "":
+			action_hint = "Assign crew to repair damaged track section."
+
+	var damaged_sws: Array = details.get("damaged_switches", []) as Array
+	for damaged_sw in damaged_sws:
+		reasons.append("Switch damaged / jammed: %s" % str(damaged_sw))
+		if action_hint == "":
+			action_hint = "Assign crew to repair switch %s." % str(damaged_sw)
+
 	if require_traction and not has_traction:
 		reasons.append("Requires crewed operational locomotive")
 		if action_hint == "":

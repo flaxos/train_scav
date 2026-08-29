@@ -99,10 +99,13 @@ func sync_points_from_rail_layout() -> void:
 		var track_position := Vector2.ZERO
 		if raw_position.size() >= 2:
 			track_position = Vector2(float(raw_position[0]), float(raw_position[1]))
+		var mech_state := MECHANICAL_OPERATIONAL
+		if rail.has_method("get_point_condition") and rail.get_point_condition(point_id) == RailMovement.CONDITION_DAMAGED:
+			mech_state = MECHANICAL_DAMAGED
 		points[point_id] = {
 			"id": point_id,
 			"name": point_id,
-			"mechanical_state": MECHANICAL_OPERATIONAL,
+			"mechanical_state": mech_state,
 			"remote_capable": false,
 			"route": rail.get_point_route(point_id),
 			"anchor": track_position + RailMovement.SWITCH_OPERATOR_ANCHOR_OFFSET,
@@ -176,7 +179,16 @@ func repair_point(point_id: String) -> bool:
 		return false
 
 	points[point_id]["mechanical_state"] = MECHANICAL_OPERATIONAL
+	if rail != null and rail.has_method("set_point_condition"):
+		rail.set_point_condition(point_id, RailMovement.CONDITION_OPERATIONAL)
 	last_status = "%s repaired" % point_id
+	return true
+
+
+func repair_track(segment_id: String) -> bool:
+	if rail != null and rail.has_method("set_track_condition"):
+		rail.set_track_condition(segment_id, RailMovement.CONDITION_OPERATIONAL)
+	last_status = "Track %s repaired" % segment_id
 	return true
 
 
@@ -245,6 +257,18 @@ func repair_shunter() -> bool:
 	return true
 
 
+func get_track_repair_anchor(segment_id: String) -> Vector2:
+	if rail != null and rail.has_method("get_track_segments"):
+		var segments: Dictionary = rail.get_track_segments()
+		if segments.has(segment_id):
+			var pts: Array = segments[segment_id] as Array
+			if pts.size() >= 2:
+				var p0 := pts[0] as Vector2
+				var p1 := pts[pts.size() - 1] as Vector2
+				return (p0 + p1) * 0.5 + Vector2(0.0, -18.0)
+	return Vector2(500.0, 300.0)
+
+
 func get_repair_anchor(target_type: String, target_id: String = "") -> Vector2:
 	match target_type:
 		"shunter":
@@ -255,6 +279,8 @@ func get_repair_anchor(target_type: String, target_id: String = "") -> Vector2:
 			return YARD_POWER_ANCHOR
 		"point":
 			return get_point_anchor(target_id)
+		"track":
+			return get_track_repair_anchor(target_id)
 	return Vector2.ZERO
 
 
@@ -271,6 +297,15 @@ func get_interaction_draw_states() -> Array[Dictionary]:
 			"remote_available": bool(point_state.get("remote_available", false)),
 			"occupied": bool(point_state.get("occupied", false)),
 		})
+
+	if rail != null and rail.has_method("get_damaged_track_ids"):
+		for segment_id in rail.get_damaged_track_ids():
+			states.append({
+				"id": segment_id,
+				"type": "repair_track",
+				"position": get_track_repair_anchor(segment_id),
+				"condition": "damaged",
+			})
 
 	states.append({
 		"id": "yard_control",
@@ -363,6 +398,11 @@ func _toggle_stored_point_route(point_id: String) -> void:
 func _sync_point_from_rail(point_id: String) -> void:
 	if not points.has(point_id) or rail == null:
 		return
+	if rail.has_method("get_point_condition"):
+		if rail.get_point_condition(point_id) == RailMovement.CONDITION_DAMAGED:
+			points[point_id]["mechanical_state"] = MECHANICAL_DAMAGED
+		elif rail.get_point_condition(point_id) == RailMovement.CONDITION_OPERATIONAL and point_id != POINT_P3:
+			points[point_id]["mechanical_state"] = MECHANICAL_OPERATIONAL
 	if point_id == POINT_P1 and _is_default_authored_layout():
 		points[point_id]["route"] = rail.points_route
 		return

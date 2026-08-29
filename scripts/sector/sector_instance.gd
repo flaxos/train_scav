@@ -36,6 +36,18 @@ func _init(sec_def: SectorDefinition, rail_model: RefCounted = null, yard_model:
 		if rail.has_method("set_unit_type_map"):
 			rail.set_unit_type_map(definition.rolling_stock_units)
 		rail.detached_consists = definition.detached_consists.duplicate(true)
+		if not definition.hazard_definitions.is_empty():
+			for hazard in definition.hazard_definitions:
+				var h_type := str(hazard.get("type", ""))
+				var h_target := str(hazard.get("target_id", ""))
+				var h_cond := str(hazard.get("condition", "damaged"))
+				match h_type:
+					"point", "turnout", "switch":
+						if rail.has_method("set_point_condition"):
+							rail.set_point_condition(h_target, h_cond)
+					"track", "segment", "bridge":
+						if rail.has_method("set_track_condition"):
+							rail.set_track_condition(h_target, h_cond)
 		if yard != null and yard.has_method("sync_points_from_rail_layout"):
 			yard.sync_points_from_rail_layout()
 	if definition != null and not definition.poi_definitions.is_empty():

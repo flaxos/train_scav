@@ -197,6 +197,9 @@ var coast_deceleration: float = 35.0
 var safe_contact_speed: float = DEFAULT_SAFE_CONTACT_SPEED
 var max_coupling_speed: float = DEFAULT_SAFE_CONTACT_SPEED
 
+var point_conditions: Dictionary = {}
+var track_conditions: Dictionary = {}
+
 
 func _init() -> void:
 	_apply_track_layout(_make_default_track_layout())
@@ -329,12 +332,55 @@ func set_point_route(point_id: String, route: String) -> bool:
 	return true
 
 
+func get_point_condition(point_id: String) -> String:
+	return str(point_conditions.get(point_id, CONDITION_OPERATIONAL))
+
+
+func set_point_condition(point_id: String, condition: String) -> bool:
+	if condition != CONDITION_OPERATIONAL and condition != CONDITION_DAMAGED:
+		return false
+	point_conditions[point_id] = condition
+	return true
+
+
+func get_track_condition(segment_id: String) -> String:
+	return str(track_conditions.get(segment_id, CONDITION_OPERATIONAL))
+
+
+func set_track_condition(segment_id: String, condition: String) -> bool:
+	if condition != CONDITION_OPERATIONAL and condition != CONDITION_DAMAGED:
+		return false
+	track_conditions[segment_id] = condition
+	return true
+
+
+func get_damaged_point_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for point_id in point_conditions.keys():
+		if str(point_conditions[point_id]) == CONDITION_DAMAGED:
+			ids.append(str(point_id))
+	ids.sort()
+	return ids
+
+
+func get_damaged_track_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for segment_id in track_conditions.keys():
+		if str(track_conditions[segment_id]) == CONDITION_DAMAGED:
+			ids.append(str(segment_id))
+	ids.sort()
+	return ids
+
+
 func request_point_toggle(point_id: String) -> bool:
 	if not _layout_point_definitions.has(point_id):
 		blocked_reason = "Unknown point"
 		return false
 	if not is_stopped():
 		blocked_reason = "Stop before changing points"
+		return false
+	if get_point_condition(point_id) != CONDITION_OPERATIONAL:
+		blocked_reason = "%s is damaged / jammed" % point_id
 		return false
 	if is_point_occupied(point_id):
 		blocked_reason = "%s occupied" % point_id
@@ -704,6 +750,10 @@ func get_mobility_summary() -> Dictionary:
 		"powered_units": operational_powered,
 		"operational_loco_count": operational_powered.size(),
 		"capabilities": get_train_capabilities(),
+		"damaged_points": get_damaged_point_ids(),
+		"damaged_tracks": get_damaged_track_ids(),
+		"point_conditions": point_conditions.duplicate(true),
+		"track_conditions": track_conditions.duplicate(true),
 	}
 
 

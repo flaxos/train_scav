@@ -123,6 +123,17 @@ func _get_open_work_targets() -> Array[Dictionary]:
 				"priority": 70,
 			})
 
+	# 5. Track repairs
+	if rail != null and rail.has_method("get_damaged_track_ids"):
+		for segment_id in rail.get_damaged_track_ids():
+			targets.append({
+				"type": "repair_track",
+				"target_id": segment_id,
+				"position": yard.get_repair_anchor("track", segment_id),
+				"reservation_key": "yard:repair_track:%s" % segment_id,
+				"priority": 65,
+			})
+
 	return targets
 
 
@@ -171,4 +182,6 @@ func _dispatch_task(survivor_id: String, task_type: String, target_id: String) -
 			return crew.assign_connect_power(survivor_id)
 		"repair_point":
 			return crew.assign_repair_point(survivor_id, target_id)
+		"repair_track":
+			return crew.assign_repair_track(survivor_id, target_id)
 	return false
