@@ -2360,8 +2360,10 @@ func _get_anchor_icon_kind(anchor_type: String) -> String:
 	if anchor_type == CrewSimulation.TASK_REPAIR_SHUNTER \
 			or anchor_type == CrewSimulation.TASK_REPAIR_YARD_CONTROL \
 			or anchor_type == CrewSimulation.TASK_REPAIR_POINT \
+			or anchor_type == CrewSimulation.TASK_REPAIR_TRACK \
 			or anchor_type == "repair_shunter" \
-			or anchor_type == "repair_yard_control":
+			or anchor_type == "repair_yard_control" \
+			or anchor_type == "repair_track":
 		return "repair"
 	return ""
 
@@ -2391,6 +2393,8 @@ func _get_anchor_label(anchor_id: String, anchor_type: String, state: Dictionary
 		return anchor_id
 	if anchor_type == CrewSimulation.TASK_COUPLE:
 		return "Couple"
+	if anchor_type == "repair_track" or anchor_type == CrewSimulation.TASK_REPAIR_TRACK:
+		return "Fix track"
 	if anchor_id == YardOperations.POINT_P1 or anchor_id == YardOperations.POINT_P2 or anchor_id == YardOperations.POINT_P3:
 		return anchor_id
 	if anchor_id == "yard_control":
@@ -2519,6 +2523,18 @@ func _add_infrastructure_context_items(items: Array[Dictionary], world_position:
 			_add_context_item(items, "Disconnect yard power", "disconnect_power", {})
 		else:
 			_add_context_item(items, "Connect train power", "connect_power", {})
+
+	if rail != null and rail.has_method("get_damaged_track_ids"):
+		for segment_id in rail.get_damaged_track_ids():
+			var track_anchor := yard.get_track_repair_anchor(segment_id)
+			if world_position.distance_to(track_anchor) <= CONTEXT_TARGET_RADIUS * 3.5:
+				var cost_str := "(uses 2 parts)"
+				if train_resources != null:
+					var parts := train_resources.get_amount(TrainResources.RESOURCE_PARTS)
+					cost_str = "(uses 2 parts; have %.0f)" % parts
+				_add_context_item(items, "Repair track %s %s" % [segment_id, cost_str], "repair_track", {
+					"segment_id": segment_id,
+				})
 
 
 func _add_shunter_context_items(items: Array[Dictionary], world_position: Vector2) -> void:
@@ -2747,6 +2763,8 @@ func _execute_context_action(item: Dictionary) -> void:
 			crew.assign_operate_yard_point(selected_id, str(item.get("point_id", "")))
 		"repair_point":
 			crew.assign_repair_point(selected_id, str(item.get("point_id", "")))
+		"repair_track":
+			crew.assign_repair_track(selected_id, str(item.get("segment_id", "")))
 		"repair_yard_control":
 			crew.assign_repair_yard_control(selected_id)
 		"connect_power":

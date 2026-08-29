@@ -263,8 +263,18 @@ func get_track_repair_anchor(segment_id: String) -> Vector2:
 		if segments.has(segment_id):
 			var pts: Array = segments[segment_id] as Array
 			if pts.size() >= 2:
-				var p0 := pts[0] as Vector2
-				var p1 := pts[pts.size() - 1] as Vector2
+				var raw0 = pts[0]
+				var raw1 = pts[pts.size() - 1]
+				var p0 := Vector2.ZERO
+				var p1 := Vector2.ZERO
+				if raw0 is Array and (raw0 as Array).size() >= 2:
+					p0 = Vector2(float((raw0 as Array)[0]), float((raw0 as Array)[1]))
+				elif raw0 is Vector2:
+					p0 = raw0 as Vector2
+				if raw1 is Array and (raw1 as Array).size() >= 2:
+					p1 = Vector2(float((raw1 as Array)[0]), float((raw1 as Array)[1]))
+				elif raw1 is Vector2:
+					p1 = raw1 as Vector2
 				return (p0 + p1) * 0.5 + Vector2(0.0, -18.0)
 	return Vector2(500.0, 300.0)
 
