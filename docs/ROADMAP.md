@@ -183,14 +183,15 @@ Only after the vertical slice is fun, Phase C should deepen the systems that mak
 | 9 | Production procedural railway sectors | Wires the proven Sprint 9 generator into the normal sector lifecycle after the authored opening, with three bounded procedural railway forms. |
 | 10 | Rolling-stock ecosystem | Gives generated yards meaningful things to contain and recover. |
 | 11 | Procgen variety pass | Promotes the remaining researched railway forms now that production procgen and rolling-stock function exist. |
-| 12 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock and world variety exist. |
-| 13 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
-| 14 | Survivor depth | Makes expedition and job decisions more consequential after world variety exists. |
-| 15 | Settlements, factions & trading | Gives people, resources and route choices persistent external meaning. |
-| 16 | Threats/combat | Adds danger after non-combat exploration already has depth. |
-| 17 | Run systems | Adds save/load, difficulty, world config and run setup once the loop is stable. |
-| 18 | Player UX pass | Improves onboarding, information architecture and controls after the systems settle. |
-| 19 | Presentation pipeline | Adds generated/authored art, audio and environmental presentation after gameplay shape is proven. |
+| 12 | Mobility, burden & route requirements | Train composition becomes strategically meaningful when routes can express simple requirements against train properties/capabilities. |
+| 13 | Locomotive acquisition & multi-loco operations | Expands the defining railway gameplay once rolling-stock and route requirements exist. |
+| 14 | Infrastructure hazards | Bridges, tunnels, damaged track, crossings and waterways create route problems. |
+| 15 | Survivor depth | Makes expedition and job decisions more consequential after world variety exists. |
+| 16 | Settlements, factions & trading | Gives people, resources and route choices persistent external meaning. |
+| 17 | Threats/combat | Adds danger after non-combat exploration already has depth. |
+| 18 | Run systems | Adds save/load, difficulty, world config and run setup once the loop is stable. |
+| 19 | Player UX pass | Improves onboarding, information architecture and controls after the systems settle. |
+| 20 | Presentation pipeline | Adds generated/authored art, audio and environmental presentation after gameplay shape is proven. |
 
 ### Sprint 9 — Procedural Railway & World Grammar
 
@@ -214,7 +215,7 @@ Sprint 9 increments:
 Sprint 10 formalises wagon types through a small shared catalogue, makes generated salvage use explicit `unit_id -> type_id` metadata, and gives recoverable non-locomotive stock real capability/capacity effects without adding a broad economy or multi-locomotive system.
 
 Status:
-> Implemented - final normal-game human UAT pending.
+> Complete — passed automated validation and human UAT.
 
 Sprint 10 acceptance:
 > The player can discover at least two materially different generated wagon functions, inspect them, physically recover them through coupling, gain their capability and carry their unique identity/type/capability into later sectors.
@@ -224,10 +225,20 @@ Sprint 10 acceptance:
 Sprint 11 promotes the remaining researched Sprint 9 reference forms into production generation: `agricultural_loading_point`, `river_valley_constrained` and `declining_abandoned_branch`. It keeps authored sectors 0-1 intact, keeps existing runtime authorities, and adds bounded deterministic spatial/topological variation without a general layout solver or new gameplay pillar.
 
 Status:
-> Automated validation complete - human UAT pending.
+> Complete — passed automated validation and human UAT.
 
 Sprint 11 acceptance:
 > Normal production generation can deterministically produce all six bounded railway forms, every generated sector remains traversable and escapable, agricultural/storage branches are physically usable, abandoned declining-branch track stays display-only, POIs remain resource-safe, and the full regression suite passes.
+
+### Sprint 12 — Mobility, Burden & Route Requirements
+
+Sprint 12 makes train composition strategically meaningful by introducing a small, explicit contract between train mobility properties (mass, length, traction authority, capabilities) and route requirements (max/min thresholds, required capability tags). It evaluates route eligibility with explicit deterministic reasons when crossing route exit branches without adding multi-locomotive control, hazards, or game-over states.
+
+Status:
+> Planning — scope contract under review.
+
+Sprint 12 acceptance:
+> Route exits can express simple requirements (such as maximum mass, maximum length, traction authority, and required capability tags); the train's physical mobility summary is evaluated deterministically; crossing an exit branch with unmet requirements is blocked with an explicit, readable reason; eligible routes can be departed onto normally; and all existing Sprint 1-11 baseline routes remain traversable and valid.
 
 9A acceptance:
 > The project has an explicit, versioned semantic railway/world schema and validated reference fixtures that later Sprint 9 generation work can consume without hard-coding authored yards or depending directly on external map tags.

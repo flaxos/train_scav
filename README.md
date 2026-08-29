@@ -4,9 +4,9 @@ Top-down 2D Godot train-survival colony prototype.
 
 ## Active Sprint
 
-Sprint 11: Procgen Variety Pass — automated validation complete; HUMAN UAT PENDING.
+Sprint 12: Mobility, Burden & Route Requirements — Planning phase.
 
-Sprint 11 promotes three planned railway forms into the production procedural generator: `agricultural_loading_point`, `river_valley_constrained` and `declining_abandoned_branch`. Sprint 10 rolling-stock salvage remains seeded only into `small_town_goods`; physical coupling remains the only ownership path.
+(Sprint 10 Rolling-Stock Ecosystem and Sprint 11 Procgen Variety Pass are complete and passed human UAT).
 
 Known Sprint 11 generated-sector UAT seeds for sector 2 on the `industrial` route:
 

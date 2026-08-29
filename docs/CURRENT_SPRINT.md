@@ -1,137 +1,80 @@
-# Current Sprint - Sprint 11: Procgen Variety Pass
+# Current Sprint - Sprint 12: Mobility, Burden & Route Requirements
 
-**Status:** AUTOMATED VALIDATION COMPLETE - HUMAN UAT PENDING
+**Status:** PLANNING — SCOPE CONTRACT UNDER REVIEW
 
 ## Hypothesis
-Generated sectors feel more replayable when the production generator can produce a wider set of already-researched railway places, while still using the existing sector lifecycle, rail movement, POIs, resources and rolling-stock ownership systems.
+Train composition becomes strategically meaningful when routes can express simple requirements against existing train properties/capabilities.
 
-The player should see different generated sectors after the authored opening:
-
-```text
-rural through
-village passing station
-small-town goods sector
-agricultural loading point
-river-valley constrained sector
-declining abandoned branch
-```
-
-Each form must remain a real `SectorDefinition` and `SectorInstance` that drives through the existing `RailMovement` authority.
+The player should experience real operational consequences for train configuration:
+- Route exits can define physical thresholds (mass, length) and required capabilities.
+- The train's physical mobility summary is evaluated deterministically against route requirements.
+- Attempting to cross an exit branch with unmet requirements blocks departure with an explicit, human-readable reason.
+- Eligible routes allow normal irreversible departure.
 
 ## Scope Contract
-- Promote the existing Sprint 9 reference archetypes `agricultural_loading_point`, `river_valley_constrained` and `declining_abandoned_branch` into production procedural generation.
-- Keep authored sectors 0-1 intact.
-- Keep Sprint 10 rolling-stock catalogue and physical ownership rules intact.
-- Use deterministic generation identity and named RNG streams.
-- Add only bounded spatial/topological variation around already-proven archetype shapes.
-- Reuse existing POI/resource/scavenging systems.
-- Ensure every generated sector remains escapable through a main route.
+- Introduce a standardized `TrainMobilitySummary` contract representing active train mass, length, traction authority, and rolling-stock capabilities.
+- Introduce an explicit `RouteRequirements` schema for `SectorDefinition` route exits (max mass, max length, required traction, required capabilities).
+- Introduce a deterministic `RouteRequirementEvaluator` to evaluate mobility against route requirements.
+- Wire route requirement evaluation into `SectorLifecycle.can_depart()` and departure boundary checks.
+- Keep authored Sectors 0-1 intact with data-driven route requirements (e.g. `industrial_exit` requiring `workshop` capability; `settlement_exit` requiring `crew_accommodation`).
+- Ensure all default/baseline procedural sector exits remain traversable by standard consists.
+- Surface train mobility summary and route requirement feedback in the debug panel and departure modal.
 
 ## Explicit Exclusions
-Do not implement during Sprint 11:
-- locomotive acquisition;
-- multi-locomotive control;
-- independent trains;
-- infrastructure hazards as gameplay damage;
-- bridge failure simulation;
-- terrain/road/water rendering as a full system;
-- general graph layout solving;
-- shunting solvability search;
+Do not implement during Sprint 12:
+- multi-locomotive control or traction summation;
+- infrastructure hazards or damage simulation (bridge collapse, tight tunnels, broken rail);
+- fuel cost rebalancing;
+- permadeath or game-over states from failed route requirement checks;
+- breaking existing Sprint 1-11 baseline routes;
+- a generic scripting or rule engine;
+- new procedural archetypes;
 - new rolling-stock types;
-- new economy/resource balance;
-- save/load changes;
-- final UI/art/audio.
+- changes to sector disposal or save/load mechanics.
 
-## Production Archetypes
-Sprint 11 production generation must support all six bounded railway forms:
+## Shared Contracts
 
-| Archetype | Required production behavior |
-| --- | --- |
-| `rural_through` | Sparse active main, simple resource opportunity. |
-| `village_passing_station` | Double-ended passing loop with station/platform semantics. |
-| `small_town_goods` | Loop plus reachable goods/loading track and Sprint 10 salvage. |
-| `agricultural_loading_point` | Through main plus reachable agricultural spur/loading/headshunt. |
-| `river_valley_constrained` | Constrained loop plus bridge/water semantic relation. |
-| `declining_abandoned_branch` | Active main/loop plus reachable overgrown storage and display-only abandoned track. |
+### Train Mobility Summary
+```gdscript
+{
+    "total_mass": 215.0,              # float: total mass in tonnes
+    "total_length": 260.0,            # float: total consist length in px
+    "unit_count": 4,                  # int: number of active rolling-stock units
+    "has_traction": true,             # bool: true if operational powered loco is crewed & selected
+    "powered_unit_id": "L",           # String: ID of active locomotive/shunter
+    "capabilities": [...],            # Array[String]: sorted unique capability tags
+}
+```
 
-## Variety Model
-Keep the model small and inspectable.
+### Route Requirements
+```gdscript
+{
+    "max_mass": 320.0,                # float (optional, 0.0 = unlimited): max mass in tonnes
+    "min_mass": 0.0,                  # float (optional, 0.0 = no min)
+    "max_length": 350.0,              # float (optional, 0.0 = unlimited): max length in px
+    "max_units": 6,                   # int (optional, 0 = unlimited): max wagon count
+    "require_traction": true,         # bool (default true): requires valid traction authority
+    "required_capabilities": ["workshop"], # Array[String]: tags that MUST be present on train
+}
+```
 
-Allowed Sprint 11 variation:
-- archetype selection among all six forms;
-- side/offset/length choices for loop-based layouts;
-- agricultural spur side, spur length and loading length;
-- river-valley bridge approach length and constrained loop shape;
-- declining-branch yard side, storage length and abandoned display-track shape;
-- POI naming/resource placement matched to the generated form.
-
-Disallowed variation:
-- arbitrary recursive module composition;
-- topology retries/fallbacks beyond clear failure diagnostics;
-- generated hazards that block departure;
-- generated unreachable mandatory resources.
+### Evaluation Result
+```gdscript
+{
+    "can_take_route": bool,
+    "blocked_reasons": Array[String],
+    "primary_reason": String,
+    "details": Dictionary,
+}
+```
 
 ## Acceptance
-Sprint 11 is complete when:
-- `WorldgenProductionSectorGenerator` deterministically supports all six production archetypes.
-- The three promoted archetypes produce valid `SectorBlueprint` data from seed/context, not by loading authored fixture files at runtime.
-- Procedural spatial embedding supports all six production archetypes with bounded deterministic variation.
-- Main-route traversal works for a broad generated seed sweep.
-- Branch/stub routes for agricultural loading and declining storage are physically reachable and reversible.
-- Declining abandoned tracks remain display-only and cannot be routed by `RailMovement`.
-- River-valley sectors include bridge/water semantic relations and remain traversable.
-- Generated POIs provide enough obtainable diesel for departure in every supported archetype.
-- Existing Sprint 10 salvage behavior remains intact for `small_town_goods`.
-- Normal `Main.tscn` can enter all six generated archetypes using seeded/debug-start UAT commands.
-- Full `tests/*.gd` suite, production headless launch and `git diff --check` pass.
-
-## Automated Validation
-Add focused Sprint 11 tests covering:
-- catalogue of six supported production archetypes;
-- deterministic identity for promoted archetypes;
-- large generated seed sweep across all six archetypes;
-- route traversal for main, agricultural loading, declining storage and river loop;
-- POI/resource safety for all forms;
-- display-only abandoned-track safety;
-- normal `Main.tscn` debug-start visibility for all six production archetypes.
-- scripted normal-`Main.tscn` debug-start UAT rehearsal for agricultural loading, river-valley and declining-branch route behavior.
-- scripted normal-game UAT rehearsal that starts in authored Sector 0, transitions through authored Sector 1, and reaches the promoted generated forms in Sector 2.
-
-## Human UAT
-Use normal `res://scenes/bootstrap/Main.tscn`.
-
-Targeted debug-start UAT may use:
-
-```bash
-TRAIN_SCAV_RUN_SEED=<known_seed> TRAIN_SCAV_START_SECTOR=2 TRAIN_SCAV_START_ROUTE=<profile> /home/flax/bin/godot --path .
-```
-
-Known sector-2 `industrial` fixtures:
-
-| Seed | Expected archetype |
-| --- | --- |
-| `6003` | `rural_through` |
-| `6012` | `village_passing_station` |
-| `6001` | `small_town_goods` |
-| `6005` | `agricultural_loading_point` |
-| `6004` | `river_valley_constrained` |
-| `6008` | `declining_abandoned_branch` |
-
-Final UAT should confirm at least three promoted/generated forms in play:
-1. agricultural loading point: inspect route/debug state, drive main route, enter the loading/headshunt route and reverse out.
-2. river-valley constrained: inspect route/debug state, confirm bridge/water semantic form in debug, drive main and loop route.
-3. declining abandoned branch: inspect route/debug state, enter active storage, confirm abandoned track is visible/display-only and not routable, reverse out.
-
-Automated debug-start rehearsal:
-
-```bash
-/home/flax/bin/godot --headless --path . --script tests/sprint11_scripted_uat_rehearsal.gd
-```
-
-Automated normal-game handoff rehearsal:
-
-```bash
-/home/flax/bin/godot --headless --path . --script tests/sprint11_normal_game_uat_rehearsal.gd
-```
-
-Do not start the later locomotive, hazard or survivor-depth sprints during Sprint 11.
+Sprint 12 is complete when:
+- `RailMovement.get_mobility_summary()` deterministically reports active consist mass, length, unit count, traction authority, and capabilities.
+- `RouteRequirementEvaluator` deterministically evaluates mobility summaries against route requirement dictionaries.
+- Crossing an exit branch whose requirements are unmet hard-brakes the train and displays the explicit rejection reason in the status panel.
+- Correcting the consist immediately makes the route eligible and allows departure.
+- Authored Sector 0 start consist `[L, A, B]` clears Sector 0 departure unconditionally.
+- Authored Sector 1 `direct_exit`, `industrial_exit`, and `settlement_exit` express explicit requirements matched to their narrative roles.
+- All 6 procedural archetypes across seeds generate valid forward exits that standard consists can depart from.
+- Automated unit tests and scripted UAT rehearsals pass cleanly.
