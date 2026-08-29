@@ -125,6 +125,22 @@ func _init(rail_model: RefCounted = null, yard_model: RefCounted = null) -> void
 	}, SurvivorSkills.JOB_MEDIC)
 
 
+func dispose() -> void:
+	reservations.clear()
+	survivors.clear()
+	selected_survivor_id = ""
+	if interior != null and interior.has_method("dispose"):
+		interior.dispose()
+	rail = null
+	yard = null
+	interior = null
+	sector_pois = null
+	train_resources = null
+	scenario_ops = null
+	needs = null
+	skills = null
+
+
 func get_survivor_ids() -> Array[String]:
 	var ids: Array[String] = []
 	for survivor in survivors:

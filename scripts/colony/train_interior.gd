@@ -2,6 +2,7 @@ extends RefCounted
 class_name TrainInterior
 
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
+const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.gd")
 
 const KIND_LOCOMOTIVE := "locomotive"
 const KIND_BUNK := "bunk"
@@ -21,24 +22,23 @@ func _init(rail_model: RefCounted) -> void:
 	rail = rail_model
 
 
+func dispose() -> void:
+	rail = null
+
+
 func get_unit_metadata(unit_id: String) -> Dictionary:
-	# Sprint 5A is intentionally explicit. Unknown future rolling stock defaults to
-	# non-boardable/non-gangway so a new tanker/flatbed cannot silently become a
-	# walk-through passenger vehicle merely because it was added to the rail model.
-	match unit_id:
-		"L":
-			return _metadata(KIND_LOCOMOTIVE, "LOCOMOTIVE", true, false, true)
-		"A":
-			return _metadata(KIND_BUNK, "BUNK", true, true, true)
-		"B":
-			return _metadata(KIND_STORAGE, "STORAGE", true, true, true)
-		"W":
-			return _metadata(KIND_WORKSHOP, "WORKSHOP", true, true, true)
-		"S":
-			# The shunter cab can hold a driver but is not a through gangway vehicle.
-			return _metadata(KIND_SHUNTER, "SHUNTER", true, false, false)
-		"C":
-			return _metadata(KIND_EXTERNAL, "NO GANGWAY", false, false, false)
+	if rail != null and rail.has_method("get_unit_definition"):
+		var definition: Dictionary = rail.get_unit_definition(unit_id)
+		if not definition.is_empty():
+			return _metadata(
+				str(definition.get("interior_kind", KIND_EXTERNAL)),
+				str(definition.get("interior_label", "NO INTERIOR")),
+				bool(definition.get("boardable", false)),
+				bool(definition.get("gangway_front", false)),
+				bool(definition.get("gangway_rear", false))
+			)
+	# Unknown future stock remains non-boardable/non-gangway until it receives
+	# explicit catalogue metadata.
 	return _metadata(KIND_EXTERNAL, "NO INTERIOR", false, false, false)
 
 

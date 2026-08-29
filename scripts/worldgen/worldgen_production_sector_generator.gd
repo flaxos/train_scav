@@ -2,6 +2,7 @@ extends RefCounted
 class_name WorldgenProductionSectorGenerator
 
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
+const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.gd")
 const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
 const TrainResources := preload("res://scripts/train/train_resources.gd")
 const WorldgenCanonical := preload("res://scripts/worldgen/worldgen_canonical.gd")
@@ -15,6 +16,15 @@ const WorldgenSemanticGenerator := preload("res://scripts/worldgen/worldgen_sema
 
 const GENERATOR_VERSION := "9_production_procedural_sectors_v1"
 const SUPPORTED_ARCHETYPES := [
+	WorldgenSemanticGenerator.ARCHETYPE_RURAL_THROUGH,
+	WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION,
+	WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS,
+	WorldgenSemanticGenerator.ARCHETYPE_AGRICULTURAL_LOADING_POINT,
+	WorldgenSemanticGenerator.ARCHETYPE_RIVER_VALLEY_CONSTRAINED,
+	WorldgenSemanticGenerator.ARCHETYPE_DECLINING_ABANDONED_BRANCH,
+]
+
+const LEGACY_SELECTION_ARCHETYPES := [
 	WorldgenSemanticGenerator.ARCHETYPE_RURAL_THROUGH,
 	WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION,
 	WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS,
@@ -88,7 +98,9 @@ func generate_sector_from_context(context: RefCounted) -> Dictionary:
 		return _failure_with_diagnostics(configure_result.get("diagnostics", []) as Array)
 
 	var poi_definitions := _make_poi_definitions(archetype_id, context, layout)
-	var detached_consists := _make_detached_consists(archetype_id, context, layout)
+	var rolling_stock := _make_detached_rolling_stock(archetype_id, context, layout)
+	var detached_consists := rolling_stock.get("detached_consists", []) as Array
+	var rolling_stock_units := rolling_stock.get("rolling_stock_units", {}) as Dictionary
 	var canonical := WorldgenCanonical.new()
 	var result := {
 		"success": true,
@@ -112,7 +124,11 @@ func generate_sector_from_context(context: RefCounted) -> Dictionary:
 		"poi_definitions": poi_definitions,
 		"poi_signature": canonical.hash_dictionary({"pois": poi_definitions}),
 		"detached_consists": detached_consists,
-		"rolling_stock_signature": canonical.hash_dictionary({"detached_consists": detached_consists}),
+		"rolling_stock_units": rolling_stock_units,
+		"rolling_stock_signature": canonical.hash_dictionary({
+			"detached_consists": detached_consists,
+			"rolling_stock_units": rolling_stock_units,
+		}),
 		"summary": {
 			"archetype_id": archetype_id,
 			"semantic_decisions": (semantic_result.get("decisions", {}) as Dictionary).duplicate(true),
@@ -133,8 +149,25 @@ func _context_has_required_api(context: RefCounted) -> bool:
 
 
 func _select_archetype(archetype_rng: RefCounted) -> String:
-	var index := int(archetype_rng.range_int(0, SUPPORTED_ARCHETYPES.size() - 1))
-	return str(SUPPORTED_ARCHETYPES[index])
+	var legacy_index := int(archetype_rng.range_int(0, LEGACY_SELECTION_ARCHETYPES.size() - 1))
+	var legacy_archetype := str(LEGACY_SELECTION_ARCHETYPES[legacy_index])
+	match legacy_archetype:
+		WorldgenSemanticGenerator.ARCHETYPE_RURAL_THROUGH:
+			var rural_family_index := int(archetype_rng.range_int(0, 2))
+			match rural_family_index:
+				0:
+					return WorldgenSemanticGenerator.ARCHETYPE_RURAL_THROUGH
+				1:
+					return WorldgenSemanticGenerator.ARCHETYPE_AGRICULTURAL_LOADING_POINT
+				_:
+					return WorldgenSemanticGenerator.ARCHETYPE_DECLINING_ABANDONED_BRANCH
+		WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION:
+			var village_family_index := int(archetype_rng.range_int(0, 1))
+			if village_family_index == 1:
+				return WorldgenSemanticGenerator.ARCHETYPE_RIVER_VALLEY_CONSTRAINED
+			return WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION
+		_:
+			return WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS
 
 
 func _make_archetype_trace(context: RefCounted, archetype_id: String) -> RefCounted:
@@ -168,25 +201,53 @@ func _make_poi_definitions(archetype_id: String, context: RefCounted, layout: Di
 				_poi("goods_shed_cache", "Goods Shed Cache", "Freight crates", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_GOODS_LOADING), Vector2(0.0, -70.0)), TrainResources.RESOURCE_PARTS, maxf(amount, 5.0)),
 				_poi("goods_yard_fuel_drum", "Yard Fuel Drum", "Fuel drum", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_GOODS_YARD_LEAD), Vector2(0.0, -58.0)), TrainResources.RESOURCE_DIESEL, departure_diesel),
 			]
+		WorldgenSemanticGenerator.ARCHETYPE_AGRICULTURAL_LOADING_POINT:
+			return [
+				_poi("grain_store_cache", "Grain Store Cache", "Food sacks", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_GRAIN_LOADING), Vector2(0.0, -72.0)), TrainResources.RESOURCE_FOOD, maxf(amount, 5.0)),
+				_poi("farm_fuel_drum", "Farm Fuel Drum", "Fuel drum", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_AGRICULTURAL_SPUR), Vector2(0.0, -56.0)), TrainResources.RESOURCE_DIESEL, departure_diesel),
+			]
+		WorldgenSemanticGenerator.ARCHETYPE_RIVER_VALLEY_CONSTRAINED:
+			return [
+				_poi("valley_station_supplies", "Valley Station Supplies", "Platform store", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_VALLEY_PLATFORM_MAIN), Vector2(0.0, -88.0)), TrainResources.RESOURCE_DIESEL, departure_diesel),
+				_poi("bridge_tool_cache", "Bridge Tool Cache", "Tool crate", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_CREEK_BRIDGE_MAIN), Vector2(0.0, -62.0)), TrainResources.RESOURCE_PARTS, maxf(amount, 4.0)),
+			]
+		WorldgenSemanticGenerator.ARCHETYPE_DECLINING_ABANDONED_BRANCH:
+			return [
+				_poi("overgrown_storage_cache", "Overgrown Storage Cache", "Recovered parts", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_OVERGROWN_STORAGE), Vector2(0.0, -70.0)), TrainResources.RESOURCE_PARTS, maxf(amount, 5.0)),
+				_poi("branch_fuel_drum", "Branch Fuel Drum", "Fuel drum", _offset_point(_segment_midpoint(layout, WorldgenSemanticGenerator.TRACK_WORN_PLATFORM_MAIN), Vector2(0.0, -86.0)), TrainResources.RESOURCE_DIESEL, departure_diesel),
+			]
 	return []
 
 
-func _make_detached_consists(archetype_id: String, context: RefCounted, _layout: Dictionary) -> Array[Dictionary]:
+func _make_detached_rolling_stock(archetype_id: String, context: RefCounted, _layout: Dictionary) -> Dictionary:
 	if archetype_id != WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS:
-		return []
+		return {
+			"detached_consists": [],
+			"rolling_stock_units": {},
+		}
 	var stock_rng: RefCounted = context.make_rng(WorldgenGenerationContext.STREAM_ROLLING_STOCK)
-	var prefix_options := ["C", "A", "B"]
-	var prefix := str(prefix_options[int(stock_rng.range_int(0, prefix_options.size() - 1))])
+	var salvage_types := RollingStockCatalog.get_salvage_type_ids()
+	if salvage_types.is_empty():
+		return {
+			"detached_consists": [],
+			"rolling_stock_units": {},
+		}
+	var type_id := str(salvage_types[int(stock_rng.range_int(0, salvage_types.size() - 1))])
 	var identity: Dictionary = context.get_identity()
 	var sector_index := int(identity.get("sector_index", 0))
-	var unit_id := "%s%03d" % [prefix, sector_index]
-	return [
-		{
-			"units": [unit_id],
-			"segment": WorldgenSemanticGenerator.TRACK_GOODS_LOADING,
-			"distance": 180.0,
+	var unit_id := "sector_%03d_salvage_01" % sector_index
+	return {
+		"detached_consists": [
+			{
+				"units": [unit_id],
+				"segment": WorldgenSemanticGenerator.TRACK_GOODS_LOADING,
+				"distance": 180.0,
+			},
+		],
+		"rolling_stock_units": {
+			unit_id: type_id,
 		},
-	]
+	}
 
 
 func _poi(poi_id: String, name: String, target_name: String, position: Array, resource_type: String, amount: float) -> Dictionary:

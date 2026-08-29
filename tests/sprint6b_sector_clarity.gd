@@ -26,7 +26,8 @@ func _init() -> void:
 func test_readme_and_scene_guide_are_current() -> void:
 	print("Testing current README and in-game guide labels...")
 	var readme := FileAccess.get_file_as_string("res://README.md")
-	_expect(readme.contains("Sprint 8: First Vertical Slice"), "README names Sprint 8 as active sprint")
+	_expect(readme.contains("Sprint 11: Procgen Variety Pass"), "README names Sprint 11 as active sprint")
+	_expect(readme.contains("Sprint 10 rolling-stock salvage remains seeded"), "README records Sprint 10 salvage compatibility")
 	_expect(not readme.contains("Sprint 4: Railway Operations Systems"), "README no longer advertises stale Sprint 4 active sprint")
 
 	var packed_scene := load("res://scenes/bootstrap/Main.tscn") as PackedScene
@@ -36,8 +37,9 @@ func test_readme_and_scene_guide_are_current() -> void:
 	await process_frame
 	var lines: Array[String] = scene.get_uat_tutorial_lines()
 	var guide := "\n".join(lines)
-	_expect(guide.contains("Train Scav - Sprint 8 UAT Guide"), "in-game guide title names Sprint 8")
-	_expect(guide.contains("vertical slice"), "in-game guide explains the Sprint 8 vertical-slice goal")
+	_expect(guide.contains("Train Scav - Sprint 11 UAT"), "in-game guide title names Sprint 11")
+	_expect(guide.contains("Sprint 11 Procgen Check"), "in-game guide exposes Sprint 11 load check")
+	_expect(guide.contains("Opening still uses Sprint 8 vertical slice"), "in-game guide preserves authored opening context")
 	_expect(not guide.contains("Sprint 5A UAT Guide"), "in-game guide no longer exposes stale Sprint 5A label")
 	scene.queue_free()
 

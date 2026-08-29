@@ -11,8 +11,13 @@ var sector_seed: int = 0
 var _pois: Dictionary = {}
 
 
-func _init(seed_value: int = 0) -> void:
+func _init(seed_value: int = 0, poi_definitions: Array[Dictionary] = []) -> void:
 	sector_seed = seed_value
+	if not poi_definitions.is_empty():
+		_pois = {}
+		for definition in poi_definitions:
+			_add_poi_from_definition(definition)
+		return
 	_pois = {
 		POI_FUEL_DEPOT: _make_poi(
 			POI_FUEL_DEPOT,
@@ -119,3 +124,25 @@ func _make_poi(poi_id: String, name: String, target_name: String, position: Vect
 		"available_amount": 0.0,
 		"status": "Unsearched",
 	}
+
+
+func _add_poi_from_definition(definition: Dictionary) -> void:
+	var poi_id := str(definition.get("id", ""))
+	if poi_id.is_empty() or _pois.has(poi_id):
+		return
+	var position := Vector2.ZERO
+	var raw_position = definition.get("position", [0.0, 0.0])
+	if typeof(raw_position) == TYPE_VECTOR2:
+		position = raw_position as Vector2
+	elif typeof(raw_position) == TYPE_ARRAY:
+		var values := raw_position as Array
+		if values.size() >= 2:
+			position = Vector2(float(values[0]), float(values[1]))
+	_pois[poi_id] = _make_poi(
+		poi_id,
+		str(definition.get("name", poi_id)),
+		str(definition.get("target_name", definition.get("name", poi_id))),
+		position,
+		str(definition.get("yield_type", TrainResources.RESOURCE_PARTS)),
+		float(definition.get("yield_amount", 0.0))
+	)

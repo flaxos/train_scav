@@ -33,6 +33,8 @@ func _init(sec_def: SectorDefinition, rail_model: RefCounted = null, yard_model:
 		var configure_result: Dictionary = rail.configure_track_layout(definition.runtime_layout)
 		if not bool(configure_result.get("valid", false)):
 			push_error("Generated sector runtime layout rejected: %s" % str(configure_result.get("diagnostics", [])))
+		if rail.has_method("set_unit_type_map"):
+			rail.set_unit_type_map(definition.rolling_stock_units)
 		rail.detached_consists = definition.detached_consists.duplicate(true)
 		if yard != null and yard.has_method("sync_points_from_rail_layout"):
 			yard.sync_points_from_rail_layout()

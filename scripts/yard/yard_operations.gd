@@ -69,9 +69,46 @@ func _init(rail_model: RefCounted = null) -> void:
 	else:
 		rail = rail_model
 
-	_sync_p1_from_rail()
-	_sync_p2_from_rail()
-	_sync_p3_from_rail()
+	sync_points_from_rail_layout()
+
+
+func dispose() -> void:
+	rail = null
+	points.clear()
+
+
+func sync_points_from_rail_layout() -> void:
+	if rail == null or not rail.has_method("get_runtime_topology_snapshot"):
+		return
+	var snapshot: Dictionary = rail.get_runtime_topology_snapshot()
+	var layout_id := str(snapshot.get("layout_id", ""))
+	if layout_id == "default_authored_yard":
+		if points.is_empty():
+			points = _make_default_points()
+		_sync_point_from_rail(POINT_P1)
+		_sync_point_from_rail(POINT_P2)
+		_sync_point_from_rail(POINT_P3)
+		return
+
+	var runtime_points := snapshot.get("points", {}) as Dictionary
+	points.clear()
+	for raw_point_id in runtime_points.keys():
+		var point_id := str(raw_point_id)
+		var runtime_point := runtime_points[raw_point_id] as Dictionary
+		var raw_position := runtime_point.get("position", []) as Array
+		var track_position := Vector2.ZERO
+		if raw_position.size() >= 2:
+			track_position = Vector2(float(raw_position[0]), float(raw_position[1]))
+		points[point_id] = {
+			"id": point_id,
+			"name": point_id,
+			"mechanical_state": MECHANICAL_OPERATIONAL,
+			"remote_capable": false,
+			"route": rail.get_point_route(point_id),
+			"anchor": track_position + RailMovement.SWITCH_OPERATOR_ANCHOR_OFFSET,
+			"track_position": track_position,
+			"rail_authority": true,
+		}
 
 
 func get_point_ids() -> Array[String]:
@@ -85,12 +122,7 @@ func get_point_state(point_id: String) -> Dictionary:
 	if not points.has(point_id):
 		return {}
 
-	if point_id == POINT_P1:
-		_sync_p1_from_rail()
-	elif point_id == POINT_P2:
-		_sync_p2_from_rail()
-	elif point_id == POINT_P3:
-		_sync_p3_from_rail()
+	_sync_point_from_rail(point_id)
 
 	var state: Dictionary = points[point_id].duplicate(true)
 	state["occupied"] = is_point_occupied(point_id)
@@ -110,21 +142,18 @@ func manual_operate_point(point_id: String) -> bool:
 	if not _validate_point_can_move(point_id):
 		return false
 
-	if point_id == POINT_P1:
+	if point_id == POINT_P1 and _is_default_authored_layout():
 		if not rail.request_points_toggle():
 			last_status = rail.blocked_reason
 			return false
-		_sync_p1_from_rail()
+		_sync_point_from_rail(point_id)
 		last_status = "Manually operated %s to %s" % [point_id, str(points[point_id]["route"])]
 		return true
-	if point_id == POINT_P2 or point_id == POINT_P3:
+	if bool(points[point_id].get("rail_authority", false)):
 		if not rail.request_yard_point_toggle(point_id):
 			last_status = rail.blocked_reason
 			return false
-		if point_id == POINT_P2:
-			_sync_p2_from_rail()
-		else:
-			_sync_p3_from_rail()
+		_sync_point_from_rail(point_id)
 		last_status = "Manually operated %s to %s" % [point_id, str(points[point_id]["route"])]
 		return true
 
@@ -154,7 +183,7 @@ func repair_point(point_id: String) -> bool:
 func is_point_occupied(point_id: String) -> bool:
 	if point_id == POINT_P1 and rail.has_method("is_switch_occupied"):
 		return rail.is_switch_occupied()
-	if (point_id == POINT_P2 or point_id == POINT_P3) and rail.has_method("is_yard_point_occupied"):
+	if rail.has_method("is_yard_point_occupied"):
 		return rail.is_yard_point_occupied(point_id)
 	return false
 
@@ -265,6 +294,8 @@ func get_interaction_draw_states() -> Array[Dictionary]:
 
 
 func get_yard_track_draw_segments() -> Array[Dictionary]:
+	if not _is_default_authored_layout():
+		return []
 	# These short overrun/apron pieces continue the two modeled P3 routes to clear
 	# buffered ends. The actual route choice and train movement are authoritative
 	# RailMovement segments; these are presentation-only continuations.
@@ -329,26 +360,56 @@ func _toggle_stored_point_route(point_id: String) -> void:
 		points[point_id]["route"] = ROUTE_MAIN
 
 
-func _sync_p1_from_rail() -> void:
-	if not points.has(POINT_P1):
+func _sync_point_from_rail(point_id: String) -> void:
+	if not points.has(point_id) or rail == null:
 		return
-	points[POINT_P1]["route"] = rail.points_route
-
-
-func _sync_p2_from_rail() -> void:
-	if not points.has(POINT_P2):
+	if point_id == POINT_P1 and _is_default_authored_layout():
+		points[point_id]["route"] = rail.points_route
 		return
 	if not rail.has_method("get_yard_point_route"):
 		return
-	points[POINT_P2]["route"] = rail.get_yard_point_route(POINT_P2)
+	points[point_id]["route"] = rail.get_yard_point_route(point_id)
 
 
-func _sync_p3_from_rail() -> void:
-	if not points.has(POINT_P3):
-		return
-	if not rail.has_method("get_yard_point_route"):
-		return
-	points[POINT_P3]["route"] = rail.get_yard_point_route(POINT_P3)
+func _is_default_authored_layout() -> bool:
+	if rail == null or not rail.has_method("get_runtime_topology_snapshot"):
+		return true
+	var snapshot: Dictionary = rail.get_runtime_topology_snapshot()
+	return str(snapshot.get("layout_id", "")) == "default_authored_yard"
+
+
+func _make_default_points() -> Dictionary:
+	return {
+		POINT_P1: {
+			"id": POINT_P1,
+			"name": "Points A",
+			"mechanical_state": MECHANICAL_OPERATIONAL,
+			"remote_capable": false,
+			"route": RailMovement.POINTS_SIDING,
+			"anchor": POINT_P1_ANCHOR,
+			"rail_authority": true,
+		},
+		POINT_P2: {
+			"id": POINT_P2,
+			"name": "Points B",
+			"mechanical_state": MECHANICAL_OPERATIONAL,
+			"remote_capable": false,
+			"route": RailMovement.POINTS_MAIN,
+			"anchor": POINT_P2_ANCHOR,
+			"track_position": POINT_P2_TRACK_POSITION,
+			"rail_authority": true,
+		},
+		POINT_P3: {
+			"id": POINT_P3,
+			"name": "Yard Ladder P3",
+			"mechanical_state": MECHANICAL_DAMAGED,
+			"remote_capable": false,
+			"route": RailMovement.POINTS_SIDING,
+			"anchor": POINT_P3_ANCHOR,
+			"track_position": POINT_P3_TRACK_POSITION,
+			"rail_authority": true,
+		},
+	}
 
 
 func _format_bool(value: bool) -> String:

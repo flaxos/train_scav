@@ -9,7 +9,10 @@ const SectorDefinition := preload("res://scripts/sector/sector_definition.gd")
 const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const SectorLifecycle := preload("res://scripts/sector/sector_lifecycle.gd")
 const TrainResources := preload("res://scripts/train/train_resources.gd")
+const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.gd")
 const FirstRunScenario := preload("res://scripts/run/first_run_scenario.gd")
+const WorldgenProductionSectorGenerator := preload("res://scripts/worldgen/worldgen_production_sector_generator.gd")
+const WorldgenSemanticGenerator := preload("res://scripts/worldgen/worldgen_semantic_generator.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -82,6 +85,27 @@ const CONTEXT_MENU_HEADER_HEIGHT := 50.0
 const CONTEXT_MENU_PADDING := 8.0
 const CONTEXT_TARGET_RADIUS := 56.0
 const UI_REFRESH_INTERVAL := 0.12
+const DEFAULT_RUN_SEED := 12345
+const ENV_RUN_SEED := "TRAIN_SCAV_RUN_SEED"
+const ENV_START_SECTOR := "TRAIN_SCAV_START_SECTOR"
+const ENV_START_ROUTE := "TRAIN_SCAV_START_ROUTE"
+const SPRINT10_SECTOR_INDEX := 2
+const SPRINT10_UAT_ROUTE_PROFILE := "industrial"
+const SPRINT10_UAT_SEED_SAMPLES := [
+	{"seed": 6001, "expected_type_id": "fuel_tanker"},
+	{"seed": 6006, "expected_type_id": "parts_flatbed"},
+	{"seed": 6061, "expected_type_id": "boxcar_storage"},
+]
+const SPRINT11_SECTOR_INDEX := 2
+const SPRINT11_UAT_ROUTE_PROFILE := "industrial"
+const SPRINT11_UAT_SEED_SAMPLES := [
+	{"seed": 6003, "expected_archetype_id": "rural_through"},
+	{"seed": 6012, "expected_archetype_id": "village_passing_station"},
+	{"seed": 6001, "expected_archetype_id": "small_town_goods"},
+	{"seed": 6005, "expected_archetype_id": "agricultural_loading_point"},
+	{"seed": 6004, "expected_archetype_id": "river_valley_constrained"},
+	{"seed": 6008, "expected_archetype_id": "declining_abandoned_branch"},
+]
 
 @onready var instruction_label: Label = %InstructionLabel
 @onready var debug_label: Label = %DebugLabel
@@ -108,6 +132,8 @@ var departure_confirmation_open: bool = false
 var departure_confirmation_lines: Array[String] = []
 var _ui_refresh_elapsed: float = 0.0
 var _ui_panel_refresh_count: int = 0
+var _sprint10_preflight_state: Dictionary = {}
+var _sprint11_preflight_state: Dictionary = {}
 
 
 func _ready() -> void:
@@ -116,7 +142,7 @@ func _ready() -> void:
 	interior = TrainInterior.new(rail)
 	crew = CrewSimulation.new(rail, yard)
 	task_broker = TaskBroker.new(crew, yard, rail)
-	lifecycle = SectorLifecycle.new(12345, crew, task_broker)
+	lifecycle = SectorLifecycle.new(_get_initial_run_seed(), crew, task_broker)
 	train_resources = lifecycle.get_train_resources()
 	train_resources.set_amount(TrainResources.RESOURCE_DIESEL, 12.0)
 	train_resources.set_amount(TrainResources.RESOURCE_FOOD, 12.0)
@@ -124,9 +150,86 @@ func _ready() -> void:
 	scenario = FirstRunScenario.new()
 	scenario.attach(lifecycle, crew, task_broker)
 	lifecycle.set_scenario_coordinator(scenario)
+	_apply_debug_start_sector_from_environment()
+	_sprint10_preflight_state = _build_sprint10_preflight_state()
+	_sprint11_preflight_state = _build_sprint11_preflight_state()
 	_refresh_side_panel_text(true)
 	_layout_ui()
 	queue_redraw()
+
+
+func _exit_tree() -> void:
+	release_runtime_references()
+
+
+func release_runtime_references() -> void:
+	# Break shutdown-only RefCounted cycles between runtime services.
+	_throttle_up_held = false
+	_throttle_down_held = false
+	_brake_held = false
+	context_menu_open = false
+	departure_confirmation_open = false
+	context_menu_items.clear()
+	departure_confirmation_lines.clear()
+	_sprint10_preflight_state.clear()
+	_sprint11_preflight_state.clear()
+
+	if scenario != null and scenario.has_method("detach"):
+		scenario.detach()
+	if lifecycle != null and lifecycle.has_method("dispose"):
+		lifecycle.dispose()
+	if task_broker != null and task_broker.has_method("dispose"):
+		task_broker.dispose()
+	if crew != null and crew.has_method("dispose"):
+		crew.dispose()
+	if interior != null and interior.has_method("dispose"):
+		interior.dispose()
+	if yard != null and yard.has_method("dispose"):
+		yard.dispose()
+	if train_resources != null and train_resources.has_method("clear_capacity_provider"):
+		train_resources.clear_capacity_provider()
+
+	rail = null
+	yard = null
+	interior = null
+	crew = null
+	task_broker = null
+	lifecycle = null
+	train_resources = null
+	scenario = null
+
+
+func _get_initial_run_seed() -> int:
+	var env_seed := OS.get_environment(ENV_RUN_SEED).strip_edges()
+	if env_seed.is_valid_int():
+		return int(env_seed)
+	return DEFAULT_RUN_SEED
+
+
+func _apply_debug_start_sector_from_environment() -> bool:
+	var env_sector := OS.get_environment(ENV_START_SECTOR).strip_edges()
+	if env_sector.is_empty():
+		return false
+	if not env_sector.is_valid_int():
+		push_warning("%s must be an integer sector index" % ENV_START_SECTOR)
+		return false
+	var route_profile := OS.get_environment(ENV_START_ROUTE).strip_edges()
+	if route_profile.is_empty():
+		route_profile = SPRINT10_UAT_ROUTE_PROFILE
+	var sector_index := int(env_sector)
+	if lifecycle == null or not lifecycle.has_method("debug_start_at_sector"):
+		return false
+	if not lifecycle.debug_start_at_sector(sector_index, route_profile):
+		push_warning("Debug sector start failed: %s" % str(lifecycle.transition_blocked_reason))
+		return false
+
+	rail = lifecycle.current_sector.rail
+	yard = lifecycle.current_sector.yard
+	train_resources = lifecycle.get_train_resources()
+	interior = crew.interior
+	if yard != null:
+		yard.last_status = "Debug start: Sector %d via %s" % [sector_index, route_profile]
+	return true
 
 
 func get_playfield_rect() -> Rect2:
@@ -184,11 +287,7 @@ func get_compact_debug_lines() -> Array[String]:
 		elapsed_time = lifecycle.current_sector.get_elapsed_time()
 	var stock := "D0 F0 P0"
 	if train_resources != null:
-		stock = "D%.0f F%.0f P%.0f" % [
-			train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
-			train_resources.get_amount(TrainResources.RESOURCE_FOOD),
-			train_resources.get_amount(TrainResources.RESOURCE_PARTS),
-		]
+		stock = _format_resource_stock()
 	var sector_line := "Sector: %s  Time: %.0fs  Stock: %s  Auto: %s" % [sec_name, elapsed_time, stock, auto_label]
 	lines.append(sector_line)
 	if source_type == SectorDefinition.SOURCE_PROCEDURAL:
@@ -199,6 +298,11 @@ func get_compact_debug_lines() -> Array[String]:
 			blueprint_hash.substr(0, 12),
 			generator_version,
 		])
+		var feature_summary := _get_archetype_feature_summary(archetype_id)
+		if feature_summary != "":
+			lines.append("Features: %s" % feature_summary)
+	for stock_line in get_current_generated_stock_debug_lines():
+		lines.append(stock_line)
 	if scenario != null:
 		var objective := _get_current_objective_text()
 		var departure_blocker := _get_departure_blocker_text()
@@ -364,7 +468,107 @@ func get_train_resource_state() -> Dictionary:
 		return {}
 	var state: Dictionary = train_resources.get_all()
 	state["departure_cost"] = TrainResources.DEPARTURE_DIESEL_COST
+	state["capacity_diesel"] = train_resources.get_capacity(TrainResources.RESOURCE_DIESEL)
+	state["capacity_food"] = train_resources.get_capacity(TrainResources.RESOURCE_FOOD)
+	state["capacity_parts"] = train_resources.get_capacity(TrainResources.RESOURCE_PARTS)
 	return state
+
+
+func get_sprint10_preflight_state() -> Dictionary:
+	if _sprint10_preflight_state.is_empty():
+		_sprint10_preflight_state = _build_sprint10_preflight_state()
+	return _sprint10_preflight_state.duplicate(true)
+
+
+func get_sprint10_preflight_lines() -> Array[String]:
+	var state := get_sprint10_preflight_state()
+	var lines: Array[String] = ["Sprint 10 Load Check"]
+	var catalog_types := state.get("catalog_type_ids", []) as Array
+	var salvage_types := state.get("salvage_type_ids", []) as Array
+	lines.append("Catalog: %d types  Salvage: %s" % [
+		catalog_types.size(),
+		", ".join(_string_array(salvage_types)),
+	])
+	for raw_sample in state.get("seed_samples", []) as Array:
+		var sample := raw_sample as Dictionary
+		var status := "SEEDED" if bool(sample.get("seeded", false)) else "MISSING"
+		lines.append("%d -> %s %s [%s]" % [
+			int(sample.get("seed", 0)),
+			str(sample.get("unit_id", "")),
+			str(sample.get("actual_type_id", "")),
+			status,
+		])
+	var current_preview := state.get("current_seed_preview", {}) as Dictionary
+	if not current_preview.is_empty():
+		var current_type := str(current_preview.get("actual_type_id", ""))
+		var current_archetype := str(current_preview.get("archetype_id", ""))
+		if current_type != "":
+			lines.append("Current seed %d sector 2: %s %s" % [
+				int(current_preview.get("seed", 0)),
+				current_archetype,
+				current_type,
+			])
+		else:
+			lines.append("Current seed %d sector 2: %s" % [
+				int(current_preview.get("seed", 0)),
+				current_archetype,
+			])
+	return lines
+
+
+func get_sprint11_preflight_state() -> Dictionary:
+	if _sprint11_preflight_state.is_empty():
+		_sprint11_preflight_state = _build_sprint11_preflight_state()
+	return _sprint11_preflight_state.duplicate(true)
+
+
+func get_sprint11_preflight_lines() -> Array[String]:
+	var state := get_sprint11_preflight_state()
+	var lines: Array[String] = ["Sprint 11 Procgen Check"]
+	var supported := state.get("supported_archetypes", []) as Array
+	lines.append("Archetypes: %d  Promoted: agricultural, river, declining" % supported.size())
+	for raw_sample in state.get("seed_samples", []) as Array:
+		var sample := raw_sample as Dictionary
+		var status := "SEEDED" if bool(sample.get("seeded", false)) else "MISSING"
+		lines.append("%d -> sector 2 %s [%s]" % [
+			int(sample.get("seed", 0)),
+			str(sample.get("actual_archetype_id", "")),
+			status,
+		])
+	var current_preview := state.get("current_seed_preview", {}) as Dictionary
+	if not current_preview.is_empty():
+		lines.append("Current seed %d sector 2: %s" % [
+			int(current_preview.get("seed", 0)),
+			str(current_preview.get("actual_archetype_id", "")),
+		])
+	return lines
+
+
+func get_current_generated_stock_debug_lines() -> Array[String]:
+	var lines: Array[String] = []
+	if rail == null:
+		return lines
+	for state in rail.get_unit_draw_states():
+		var unit_id := str(state.get("id", ""))
+		if not unit_id.begins_with("sector_"):
+			continue
+		var type_id := str(state.get("type_id", ""))
+		var ownership := "owned" if bool(state.get("active", false)) else "salvage"
+		var summary := str(state.get("capability_summary", ""))
+		if summary != "":
+			lines.append("Generated stock: %s %s %s - %s" % [
+				unit_id,
+				type_id,
+				ownership,
+				summary,
+			])
+		else:
+			lines.append("Generated stock: %s %s %s" % [
+				unit_id,
+				type_id,
+				ownership,
+			])
+	return lines
 
 
 func get_vertical_slice_state() -> Dictionary:
@@ -708,8 +912,14 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 8 UAT Guide",
-		"Goal: complete the first vertical slice.",
+		"Train Scav - Sprint 11 UAT",
+		"Goal: prove bounded procedural railway variety.",
+	]
+	for line in get_sprint11_preflight_lines():
+		lines.append(line)
+	lines.append_array([
+		"Opening still uses Sprint 8 vertical slice.",
+		"Sprint 10 salvage seeds remain active.",
 		"Mouse-first operations",
 		"Left click survivor: select",
 		"Right click object/train/POI: options",
@@ -721,7 +931,7 @@ func get_uat_tutorial_lines() -> Array[String]:
 		"Shunter S appears in Sector 1 after first departure.",
 		"Departure requires all crew aboard and diesel.",
 		"Departure blockers show in Objective/Status.",
-	]
+	])
 	var steps := _get_uat_step_states()
 	var current_step := get_current_uat_step_index()
 	for index in steps.size():
@@ -1816,6 +2026,115 @@ func _refresh_instruction_text() -> void:
 	_refresh_side_panel_text(true)
 
 
+func _build_sprint10_preflight_state() -> Dictionary:
+	var seed_samples: Array[Dictionary] = []
+	for sample in SPRINT10_UAT_SEED_SAMPLES:
+		seed_samples.append(_make_sprint10_seed_preview(sample as Dictionary))
+	var current_seed := DEFAULT_RUN_SEED
+	if lifecycle != null and lifecycle.run_state != null:
+		current_seed = int(lifecycle.run_state.run_seed)
+	var current_preview := _make_sprint10_seed_preview({
+		"seed": current_seed,
+		"expected_type_id": "",
+	})
+	return {
+		"catalog_loaded": true,
+		"catalog_type_ids": RollingStockCatalog.get_type_ids(),
+		"salvage_type_ids": RollingStockCatalog.get_salvage_type_ids(),
+		"seed_samples": seed_samples,
+		"current_seed_preview": current_preview,
+	}
+
+
+func _build_sprint11_preflight_state() -> Dictionary:
+	var seed_samples: Array[Dictionary] = []
+	for sample in SPRINT11_UAT_SEED_SAMPLES:
+		seed_samples.append(_make_sprint11_seed_preview(sample as Dictionary))
+	var current_seed := DEFAULT_RUN_SEED
+	if lifecycle != null and lifecycle.run_state != null:
+		current_seed = int(lifecycle.run_state.run_seed)
+	var current_preview := _make_sprint11_seed_preview({
+		"seed": current_seed,
+		"expected_archetype_id": "",
+	})
+	return {
+		"supported_archetypes": WorldgenProductionSectorGenerator.SUPPORTED_ARCHETYPES,
+		"seed_samples": seed_samples,
+		"current_seed_preview": current_preview,
+	}
+
+
+func _make_sprint10_seed_preview(sample: Dictionary) -> Dictionary:
+	var seed := int(sample.get("seed", 0))
+	var expected_type_id := str(sample.get("expected_type_id", ""))
+	var result := WorldgenProductionSectorGenerator.new().generate_sector(
+		seed,
+		SPRINT10_SECTOR_INDEX,
+		SPRINT10_UAT_ROUTE_PROFILE
+	)
+	var unit_id := "sector_%03d_salvage_01" % SPRINT10_SECTOR_INDEX
+	var unit_types := result.get("rolling_stock_units", {}) as Dictionary
+	var detached := result.get("detached_consists", []) as Array
+	var segment_id := ""
+	var distance := 0.0
+	if not detached.is_empty():
+		var placement := detached[0] as Dictionary
+		segment_id = str(placement.get("segment", ""))
+		distance = float(placement.get("distance", 0.0))
+	var actual_type_id := str(unit_types.get(unit_id, ""))
+	var archetype_id := str(result.get("archetype_id", ""))
+	var success := bool(result.get("success", false))
+	var expected_matches := true
+	if expected_type_id != "":
+		expected_matches = actual_type_id == expected_type_id
+	return {
+		"seed": seed,
+		"sector_index": SPRINT10_SECTOR_INDEX,
+		"route_profile": SPRINT10_UAT_ROUTE_PROFILE,
+		"success": success,
+		"archetype_id": archetype_id,
+		"unit_id": unit_id,
+		"expected_type_id": expected_type_id,
+		"actual_type_id": actual_type_id,
+		"capability_summary": RollingStockCatalog.get_capability_summary(actual_type_id),
+		"placement_segment": segment_id,
+		"placement_distance": distance,
+		"rolling_stock_signature": str(result.get("rolling_stock_signature", "")),
+		"seeded": success \
+				and archetype_id == WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS \
+				and actual_type_id != "" \
+				and expected_matches,
+	}
+
+
+func _make_sprint11_seed_preview(sample: Dictionary) -> Dictionary:
+	var seed := int(sample.get("seed", 0))
+	var expected_archetype_id := str(sample.get("expected_archetype_id", ""))
+	var result := WorldgenProductionSectorGenerator.new().generate_sector(
+		seed,
+		SPRINT11_SECTOR_INDEX,
+		SPRINT11_UAT_ROUTE_PROFILE
+	)
+	var actual_archetype_id := str(result.get("archetype_id", ""))
+	var success := bool(result.get("success", false))
+	var expected_matches := true
+	if expected_archetype_id != "":
+		expected_matches = actual_archetype_id == expected_archetype_id
+	return {
+		"seed": seed,
+		"sector_index": SPRINT11_SECTOR_INDEX,
+		"route_profile": SPRINT11_UAT_ROUTE_PROFILE,
+		"success": success,
+		"expected_archetype_id": expected_archetype_id,
+		"actual_archetype_id": actual_archetype_id,
+		"blueprint_hash": str(result.get("blueprint_hash", "")),
+		"spatial_embedding_hash": str(result.get("spatial_embedding_hash", "")),
+		"runtime_topology_hash": str(result.get("runtime_topology_hash", "")),
+		"poi_signature": str(result.get("poi_signature", "")),
+		"seeded": success and expected_matches,
+	}
+
+
 func _get_uat_step_states() -> Array[Dictionary]:
 	var fuel: Dictionary = get_sector_poi_state("fuel_depot")
 	var parts: Dictionary = get_sector_poi_state("maintenance_shed")
@@ -2493,7 +2812,13 @@ func _describe_context_target(world_position: Vector2, clicked_survivor_id: Stri
 
 	var target_unit := _get_unit_id_near_world_position(world_position)
 	if target_unit != "":
-		return "%s (%s interior)" % [target_unit, interior.get_unit_interior_label(target_unit)]
+		var state := _get_unit_draw_state(target_unit)
+		var display_name := str(state.get("label", target_unit))
+		var summary := str(state.get("capability_summary", ""))
+		var ownership := "owned" if bool(state.get("active", false)) else "salvage"
+		if summary != "":
+			return "%s [%s] - %s" % [display_name, ownership, summary]
+		return "%s [%s] (%s interior)" % [display_name, ownership, interior.get_unit_interior_label(target_unit)]
 
 	for joint in rail.get_coupled_joints():
 		var anchor := joint.get("anchor", Vector2.ZERO) as Vector2
@@ -2507,6 +2832,19 @@ func _describe_context_target(world_position: Vector2, clicked_survivor_id: Stri
 			return "Coupling contact"
 
 	return "Ground"
+
+
+func _format_resource_stock() -> String:
+	if train_resources == null:
+		return "D0 F0 P0"
+	return "D%.0f/%.0f F%.0f/%.0f P%.0f/%.0f" % [
+		train_resources.get_amount(TrainResources.RESOURCE_DIESEL),
+		train_resources.get_capacity(TrainResources.RESOURCE_DIESEL),
+		train_resources.get_amount(TrainResources.RESOURCE_FOOD),
+		train_resources.get_capacity(TrainResources.RESOURCE_FOOD),
+		train_resources.get_amount(TrainResources.RESOURCE_PARTS),
+		train_resources.get_capacity(TrainResources.RESOURCE_PARTS),
+	]
 
 
 func _get_selected_survivor_name() -> String:
@@ -2825,6 +3163,30 @@ func _yes_no(value: bool) -> String:
 	if value:
 		return "yes"
 	return "no"
+
+
+func _string_array(values: Array) -> Array[String]:
+	var result: Array[String] = []
+	for value in values:
+		result.append(str(value))
+	return result
+
+
+func _get_archetype_feature_summary(archetype_id: String) -> String:
+	match archetype_id:
+		WorldgenSemanticGenerator.ARCHETYPE_RURAL_THROUGH:
+			return "sparse through main, wayside diesel"
+		WorldgenSemanticGenerator.ARCHETYPE_VILLAGE_PASSING_STATION:
+			return "station loop, platform route"
+		WorldgenSemanticGenerator.ARCHETYPE_SMALL_TOWN_GOODS:
+			return "goods loading, recoverable Sprint 10 salvage"
+		WorldgenSemanticGenerator.ARCHETYPE_AGRICULTURAL_LOADING_POINT:
+			return "agricultural loading, grain track, headshunt"
+		WorldgenSemanticGenerator.ARCHETYPE_RIVER_VALLEY_CONSTRAINED:
+			return "bridge/water crossing, constrained loop"
+		WorldgenSemanticGenerator.ARCHETYPE_DECLINING_ABANDONED_BRANCH:
+			return "overgrown storage, display-only abandoned track"
+	return ""
 
 
 func _on_off(value: bool) -> String:

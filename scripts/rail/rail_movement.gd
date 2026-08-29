@@ -1,6 +1,8 @@
 extends RefCounted
 class_name RailMovement
 
+const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.gd")
+
 const SEGMENT_MAIN_WEST := "main_west"
 const SEGMENT_MAIN_EAST := "main_east"
 const SEGMENT_MAIN_EXIT := "main_exit"
@@ -168,6 +170,7 @@ var powered_unit_conditions: Dictionary = {
 	"L": CONDITION_OPERATIONAL,
 	"S": CONDITION_DAMAGED,
 }
+var unit_type_overrides: Dictionary = {}
 var active_units: Array[String] = ["L", "A", "B"]
 var detached_consists: Array[Dictionary] = [
 	{
@@ -479,8 +482,7 @@ func get_controlled_power_unit_id() -> String:
 
 
 func is_powered_unit(unit_id: String) -> bool:
-	var unit_type := get_unit_type(unit_id)
-	return unit_type == UNIT_LOCOMOTIVE or unit_type == UNIT_SHUNTER
+	return bool(get_unit_definition(unit_id).get("powered", false))
 
 
 func get_powered_unit_condition(unit_id: String) -> String:
@@ -601,11 +603,11 @@ func has_detached_consist(units: Array[String], segment_id: String) -> bool:
 func get_wagon_type_count() -> int:
 	var wagon_types := {}
 	for unit_id in _get_all_unit_ids():
-		var unit_type := get_unit_type(unit_id)
-		if unit_type == UNIT_LOCOMOTIVE:
+		var type_id := get_unit_type_id(unit_id)
+		if type_id == RollingStockCatalog.TYPE_LOCOMOTIVE_DIESEL:
 			continue
 
-		wagon_types[unit_type] = true
+		wagon_types[type_id] = true
 
 	return wagon_types.size()
 
@@ -659,20 +661,96 @@ func get_total_mass() -> float:
 	return total
 
 
+func set_unit_type(unit_id: String, type_id: String) -> bool:
+	if unit_id == "" or not RollingStockCatalog.has_type(type_id):
+		return false
+	unit_type_overrides[unit_id] = type_id
+	if bool(RollingStockCatalog.get_definition(type_id).get("powered", false)) \
+			and not powered_unit_conditions.has(unit_id):
+		powered_unit_conditions[unit_id] = CONDITION_OPERATIONAL
+	return true
+
+
+func set_unit_type_map(type_map: Dictionary) -> void:
+	for raw_unit_id in type_map.keys():
+		set_unit_type(str(raw_unit_id), str(type_map[raw_unit_id]))
+
+
+func get_unit_type_id(unit_id: String) -> String:
+	if unit_type_overrides.has(unit_id):
+		return str(unit_type_overrides.get(unit_id, ""))
+	return RollingStockCatalog.infer_legacy_type_id(unit_id)
+
+
+func get_unit_type_map(unit_ids: Array[String] = []) -> Dictionary:
+	var ids: Array[String] = []
+	if unit_ids.is_empty():
+		ids = _get_all_unit_ids()
+	else:
+		ids.assign(unit_ids)
+	var result: Dictionary = {}
+	for unit_id in ids:
+		var type_id := get_unit_type_id(unit_id)
+		if type_id == "":
+			continue
+		result[unit_id] = type_id
+	return result
+
+
+func get_unit_definition(unit_id: String) -> Dictionary:
+	return RollingStockCatalog.get_definition_for_unit(unit_id, unit_type_overrides)
+
+
+func get_unit_capability_summary(unit_id: String) -> String:
+	return str(get_unit_definition(unit_id).get("summary", ""))
+
+
+func get_unit_capabilities(unit_id: String) -> Array[String]:
+	return RollingStockCatalog.get_capabilities_for_unit(unit_id, unit_type_overrides)
+
+
+func get_train_capabilities() -> Array[String]:
+	return RollingStockCatalog.get_capabilities_for_units(active_units, unit_type_overrides)
+
+
+func has_train_capability(capability: String) -> bool:
+	return capability != "" and get_train_capabilities().has(capability)
+
+
+func get_train_resource_capacities() -> Dictionary:
+	return RollingStockCatalog.get_resource_capacity_for_units(active_units, unit_type_overrides)
+
+
 func get_unit_type(unit_id: String) -> String:
-	return str(_UNIT_TYPES.get(unit_id, "unknown"))
+	return str(get_unit_definition(unit_id).get("physical_type", "unknown"))
 
 
 func get_unit_label(unit_id: String) -> String:
-	return str(_UNIT_LABELS.get(unit_id, unit_id))
+	if _UNIT_LABELS.has(unit_id):
+		return str(_UNIT_LABELS.get(unit_id, unit_id))
+	var definition := get_unit_definition(unit_id)
+	var display_name := str(definition.get("display_name", ""))
+	if display_name != "":
+		return "%s %s" % [display_name, unit_id]
+	return unit_id
 
 
 func get_unit_length(unit_id: String) -> float:
-	return float(_UNIT_LENGTHS.get(unit_id, 48.0))
+	if _UNIT_LENGTHS.has(unit_id):
+		return float(_UNIT_LENGTHS.get(unit_id, 48.0))
+	var definition := get_unit_definition(unit_id)
+	if not definition.is_empty():
+		return float(definition.get("length", 48.0))
+	return 48.0
 
 
 func get_unit_mass(unit_id: String) -> float:
-	return float(_UNIT_MASSES.get(unit_id, 10.0))
+	if _UNIT_MASSES.has(unit_id):
+		return float(_UNIT_MASSES.get(unit_id, 10.0))
+	var definition := get_unit_definition(unit_id)
+	if not definition.is_empty():
+		return float(definition.get("mass", 10.0))
+	return 10.0
 
 
 func get_unit_draw_states() -> Array[Dictionary]:
@@ -687,8 +765,10 @@ func get_unit_draw_states() -> Array[Dictionary]:
 		var segment_distance := float(rail_position["distance"])
 		states.append({
 			"id": unit_id,
+			"type_id": get_unit_type_id(unit_id),
 			"type": get_unit_type(unit_id),
 			"label": get_unit_label(unit_id),
+			"capability_summary": get_unit_capability_summary(unit_id),
 			"segment": segment_id,
 			"distance": segment_distance,
 			"position": get_position_at_distance(segment_id, segment_distance),
@@ -1629,6 +1709,10 @@ func _get_all_unit_ids() -> Array[String]:
 	return ids
 
 
+func _get_unit_type_for_id(unit_id: String) -> String:
+	return get_unit_type(unit_id)
+
+
 func _find_detached_consist_index(unit_id: String) -> int:
 	for index in detached_consists.size():
 		if _get_detached_units(detached_consists[index]).has(unit_id):
@@ -2039,8 +2123,10 @@ func _get_detached_draw_states(consist: Dictionary) -> Array[Dictionary]:
 		var resolved_distance := float(rail_position["distance"])
 		states.append({
 			"id": unit_id,
+			"type_id": get_unit_type_id(unit_id),
 			"type": get_unit_type(unit_id),
 			"label": get_unit_label(unit_id),
+			"capability_summary": get_unit_capability_summary(unit_id),
 			"segment": resolved_segment,
 			"distance": resolved_distance,
 			"position": get_position_at_distance(resolved_segment, resolved_distance),

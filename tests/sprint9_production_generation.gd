@@ -7,12 +7,16 @@ const VALIDATOR_PATH := "res://scripts/worldgen/worldgen_schema_validator.gd"
 const RAIL_PATH := "res://scripts/rail/rail_movement.gd"
 const CANONICAL_PATH := "res://scripts/worldgen/worldgen_canonical.gd"
 const TrainResources := preload("res://scripts/train/train_resources.gd")
+const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.gd")
 
 const GENERATOR_VERSION := "9_production_procedural_sectors_v1"
 const SUPPORTED_ARCHETYPES := {
 	"rural_through": true,
 	"village_passing_station": true,
 	"small_town_goods": true,
+	"agricultural_loading_point": true,
+	"river_valley_constrained": true,
+	"declining_abandoned_branch": true,
 }
 
 var _failures: int = 0
@@ -22,7 +26,7 @@ func _init() -> void:
 	print("\n--- Starting Sprint 9 Production Generation Tests ---")
 	_required_files_exist()
 	_same_seed_reproduces_complete_generated_sector()
-	_known_sample_produces_all_three_archetypes()
+	_known_sample_produces_supported_archetypes()
 	_generated_sector_sweep_is_valid_and_configurable()
 	_all_supported_archetypes_include_departure_diesel()
 	_decoration_stream_consumption_does_not_change_generated_sector()
@@ -61,9 +65,9 @@ func _same_seed_reproduces_complete_generated_sector() -> void:
 		_expect(not (definition.runtime_layout as Dictionary).is_empty(), "definition carries runtime layout for SectorInstance")
 
 
-func _known_sample_produces_all_three_archetypes() -> void:
+func _known_sample_produces_supported_archetypes() -> void:
 	var seen: Dictionary = {}
-	for index in range(2, 122):
+	for index in range(2, 242):
 		var result := _generate(44001, index, "forward")
 		if result.is_empty():
 			continue
@@ -128,7 +132,10 @@ func _generated_goods_sector_reuses_existing_physical_coupling() -> void:
 	if units.is_empty():
 		return
 	var target_unit := str(units[0])
-	_expect(target_unit.begins_with("A") or target_unit.begins_with("B") or target_unit.begins_with("C"), "generated salvage unit uses an existing wagon type prefix")
+	var unit_types := definition.rolling_stock_units as Dictionary
+	var target_type := str(unit_types.get(target_unit, ""))
+	_expect(target_unit.begins_with("sector_"), "generated salvage unit uses deterministic sector-scoped identity")
+	_expect(RollingStockCatalog.get_salvage_type_ids().has(target_type), "generated salvage unit records an allowed explicit wagon type")
 
 	var main_result := _make_configured_rail(goods)
 	if main_result.is_empty():
@@ -234,6 +241,8 @@ func _make_configured_rail(result: Dictionary) -> Dictionary:
 	if not bool(configured.get("valid", false)):
 		printerr("Rail diagnostics: %s" % str(configured.get("diagnostics", [])))
 		return {}
+	if rail.has_method("set_unit_type_map"):
+		rail.set_unit_type_map(result.get("rolling_stock_units", {}) as Dictionary)
 	return {
 		"rail": rail,
 		"layout": layout,

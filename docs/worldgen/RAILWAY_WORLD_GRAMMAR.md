@@ -144,16 +144,19 @@ Allowed 9G variation is deliberately small:
 
 9G does not generate loop side, station side, physical road geometry, coordinates, goods yards, agricultural loading, river crossings or abandoned branches.
 
-## Sprint 9 Production Procedural Sectors
-Sprint 9 final production integration keeps the authored opening intact, then generates sector index 2 and beyond through the normal lifecycle.
+## Production Procedural Sectors
+Production integration keeps the authored opening intact, then generates sector index 2 and beyond through the normal lifecycle.
 
-The production semantic generator supports three bounded procedural railway forms:
+The production semantic generator supports six bounded procedural railway forms:
 
 | Archetype | Semantic grammar |
 | --- | --- |
 | `rural_through` | `ENTRY -> rural_main -> EXIT`, with a simple wayside world relationship. |
 | `village_passing_station` | `ENTRY -> approach main -> west loop switch -> station main or passing loop -> east loop switch -> exit main -> EXIT`, with station/platform/settlement semantics. |
 | `small_town_goods` | Through main plus passing/platform track, connected goods-yard lead, loading track, headshunt/buffer semantics and freight-facility relationship. |
+| `agricultural_loading_point` | Through main plus agricultural spur, grain loading track and short headshunt with agricultural freight-facility semantics. |
+| `river_valley_constrained` | Short constrained loop and bridge approach with paired water-crossing and bridge-carries-track semantics. |
+| `declining_abandoned_branch` | Active worn main/loop and overgrown storage, plus abandoned/display-only track semantics that do not enter runtime route presets. |
 
 The production spatial generator:
 - consumes only the `spatial` RNG stream;
@@ -170,7 +173,10 @@ Allowed physical variation remains bounded:
 - exit length class;
 - loop offset class;
 - goods/loading length and yard offset class for goods sectors.
+- agricultural spur side and loading length;
+- river-valley bridge, approach and exit length classes;
+- declining storage length, yard side and abandoned display-track shape.
 
-Generated POIs are initial `SectorPOIs` state and use existing search/carry/deposit ownership rules. Each production procedural archetype includes enough obtainable diesel in generated POIs to satisfy the next departure cost after normal hauling and deposit; goods sectors also keep a parts cache for the freight/goods context. Generated goods rolling stock is initial detached `RailMovement` state using existing wagon type prefixes; it becomes owned only through existing physical coupling.
+Generated POIs are initial `SectorPOIs` state and use existing search/carry/deposit ownership rules. Each production procedural archetype includes enough obtainable diesel in generated POIs to satisfy the next departure cost after normal hauling and deposit; goods sectors also keep a parts cache for the freight/goods context. Generated goods rolling stock is initial detached `RailMovement` state using explicit Sprint 10 wagon type metadata; it becomes owned only through existing physical coupling.
 
-Sprint 9 does not generate terrain, settlements as geometry, roads, rivers, bridges, agricultural sites or abandoned branches. The generated debug harness remains useful, but final acceptance is through the normal production game.
+Sprint 11 adds bridge/water and abandoned-branch semantics but still does not generate full terrain, settlement geometry, road geometry, infrastructure hazards or arbitrary composed modules. The generated debug harness remains useful, but final acceptance is through the normal production game.

@@ -27,6 +27,14 @@ func _init(crew_sim: RefCounted, yard_ops: RefCounted, rail_mov: RefCounted) -> 
 	rail = rail_mov
 
 
+func dispose() -> void:
+	enabled = false
+	crew = null
+	yard = null
+	rail = null
+	scenario = null
+
+
 func step(_delta: float) -> void:
 	if not enabled or crew == null or yard == null:
 		return

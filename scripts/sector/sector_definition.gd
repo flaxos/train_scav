@@ -39,6 +39,7 @@ var runtime_layout: Dictionary = {}
 var route_presets: Array[Dictionary] = []
 var poi_definitions: Array[Dictionary] = []
 var detached_consists: Array[Dictionary] = []
+var rolling_stock_units: Dictionary = {}
 var worldgen_summary: Dictionary = {}
 
 
@@ -92,6 +93,7 @@ static func from_procedural_result(result: Dictionary) -> SectorDefinition:
 	def.route_presets.assign((def.runtime_layout.get("route_presets", []) as Array).duplicate(true))
 	def.poi_definitions.assign((result.get("poi_definitions", []) as Array).duplicate(true))
 	def.detached_consists.assign((result.get("detached_consists", []) as Array).duplicate(true))
+	def.rolling_stock_units = (result.get("rolling_stock_units", {}) as Dictionary).duplicate(true)
 	def.worldgen_summary = (result.get("summary", {}) as Dictionary).duplicate(true)
 	def.entry_segment = str(def.runtime_layout.get("entry_segment", ""))
 	def.entry_distance = float(def.runtime_layout.get("entry_distance", 0.0))
@@ -128,6 +130,7 @@ func get_worldgen_debug_state() -> Dictionary:
 		"runtime_topology_hash": runtime_topology_hash,
 		"poi_signature": poi_signature,
 		"rolling_stock_signature": rolling_stock_signature,
+		"rolling_stock_units": rolling_stock_units.duplicate(true),
 	}
 
 
@@ -199,6 +202,12 @@ static func _template_name_for_archetype(archetype: String) -> String:
 			return "Procedural Village Passing"
 		"small_town_goods":
 			return "Procedural Small-Town Goods"
+		"agricultural_loading_point":
+			return "Procedural Agricultural Loading"
+		"river_valley_constrained":
+			return "Procedural River Valley"
+		"declining_abandoned_branch":
+			return "Procedural Declining Branch"
 	return "Procedural Sector"
 
 
@@ -210,6 +219,12 @@ static func _display_name_for_archetype(archetype: String) -> String:
 			return "Village Passing Station"
 		"small_town_goods":
 			return "Small-Town Goods Sector"
+		"agricultural_loading_point":
+			return "Agricultural Loading Point"
+		"river_valley_constrained":
+			return "River-Valley Constrained Sector"
+		"declining_abandoned_branch":
+			return "Declining Abandoned Branch"
 	return "Procedural Sector"
 
 
@@ -221,4 +236,10 @@ static func _accent_color_for_archetype(archetype: String) -> Color:
 			return Color(0.42, 0.70, 0.95, 0.92)
 		"small_town_goods":
 			return Color(0.96, 0.67, 0.24, 0.92)
+		"agricultural_loading_point":
+			return Color(0.64, 0.82, 0.36, 0.92)
+		"river_valley_constrained":
+			return Color(0.32, 0.76, 0.82, 0.92)
+		"declining_abandoned_branch":
+			return Color(0.78, 0.62, 0.46, 0.92)
 	return Color(0.35, 0.95, 0.85, 0.9)

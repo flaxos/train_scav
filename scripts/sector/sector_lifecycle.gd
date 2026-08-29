@@ -47,6 +47,7 @@ func _init(initial_seed: int = 12345, crew_sim: RefCounted = null, broker: RefCo
 
 	current_sector = SectorInstance.new(initial_def, rail_inst, yard_inst)
 	_link_scavenging_context()
+	_bind_resource_capacity_provider()
 
 
 func get_train_resources() -> TrainResources:
@@ -58,6 +59,97 @@ func set_scenario_coordinator(coordinator: RefCounted) -> void:
 	if scenario_coordinator != null and scenario_coordinator.has_method("configure_sector") and current_sector != null:
 		scenario_coordinator.configure_sector(current_sector)
 	_link_scavenging_context()
+
+
+func clear_scenario_coordinator() -> void:
+	scenario_coordinator = null
+
+
+func dispose() -> void:
+	is_transitioning = false
+	transition_blocked_reason = ""
+	scenario_coordinator = null
+	if train_resources != null and train_resources.has_method("clear_capacity_provider"):
+		train_resources.clear_capacity_provider()
+	if current_sector != null:
+		current_sector.dispose()
+	if previous_sector != null:
+		previous_sector.dispose()
+	current_sector = null
+	previous_sector = null
+	crew = null
+	task_broker = null
+	train_resources = null
+	sector_definition_provider = null
+	run_state = null
+
+
+func debug_start_at_sector(sector_index: int, route_profile: String = "") -> bool:
+	var handoff_index := SectorDefinitionProvider.FIRST_PROCEDURAL_SECTOR_INDEX
+	if sector_definition_provider != null and sector_definition_provider.has_method("get_handoff_index"):
+		handoff_index = int(sector_definition_provider.get_handoff_index())
+	if sector_index < handoff_index:
+		transition_blocked_reason = "Debug start requires procedural sector index >= %d" % handoff_index
+		return false
+
+	var profile := route_profile.strip_edges()
+	if profile.is_empty():
+		profile = "forward"
+	var target_def := _create_sector_definition_for_profile(sector_index, profile)
+	if target_def == null:
+		transition_blocked_reason = "Debug start failed: procedural sector generation failed"
+		return false
+
+	var old_sector := current_sector
+	var consist_order: Array[String] = ["L", "A", "B"]
+	var controlled_power_id := "L"
+	var powered_conditions: Dictionary = {"L": RailMovement.CONDITION_OPERATIONAL}
+	var consist_type_map: Dictionary = {}
+	if old_sector != null and old_sector.rail != null:
+		consist_order = old_sector.rail.active_units.duplicate()
+		controlled_power_id = str(old_sector.rail.controlled_power_unit_id)
+		powered_conditions = old_sector.rail.powered_unit_conditions.duplicate()
+		if old_sector.rail.has_method("get_unit_type_map"):
+			consist_type_map = old_sector.rail.get_unit_type_map(consist_order)
+
+	var new_rail := RailMovement.new()
+	var new_yard := YardOperations.new(new_rail)
+	var new_sector := SectorInstance.new(target_def, new_rail, new_yard)
+
+	if new_rail.has_method("set_unit_type_map"):
+		new_rail.set_unit_type_map(consist_type_map)
+	new_rail.active_units = consist_order.duplicate()
+	new_rail.controlled_power_unit_id = controlled_power_id
+	new_rail.powered_unit_conditions = powered_conditions
+	new_rail.current_segment = target_def.entry_segment
+	new_rail.distance = target_def.entry_distance
+	new_rail.speed = 0.0
+	new_rail.throttle = 0.0
+	new_rail.direction = 1
+
+	if old_sector != null:
+		old_sector.dispose()
+	previous_sector = null
+	current_sector = new_sector
+	run_state.sector_index = sector_index
+	run_state.transition_count = 0
+	run_state.previous_sector_disposed = false
+	run_state.last_departed_sector_id = ""
+	run_state.run_journal.clear()
+	run_state.route_choice = profile
+	run_state.next_sector_profile = profile
+
+	if crew != null:
+		crew.reset_for_new_sector(new_rail, new_yard)
+	_link_scavenging_context()
+	_bind_resource_capacity_provider()
+	if task_broker != null:
+		task_broker.rail = new_rail
+		task_broker.yard = new_yard
+	if scenario_coordinator != null and scenario_coordinator.has_method("configure_sector"):
+		scenario_coordinator.configure_sector(new_sector)
+	transition_blocked_reason = ""
+	return true
 
 
 func can_depart() -> bool:
@@ -120,6 +212,9 @@ func request_transition() -> bool:
 	var consist_order: Array[String] = old_sector.rail.active_units.duplicate()
 	var controlled_power_id: String = str(old_sector.rail.controlled_power_unit_id)
 	var powered_conditions: Dictionary = old_sector.rail.powered_unit_conditions.duplicate()
+	var consist_type_map: Dictionary = {}
+	if old_sector.rail.has_method("get_unit_type_map"):
+		consist_type_map = old_sector.rail.get_unit_type_map(consist_order)
 
 	# 2. Build next sector definition and new disposable environment
 	var new_rail := RailMovement.new()
@@ -127,6 +222,8 @@ func request_transition() -> bool:
 	var new_sector := SectorInstance.new(next_def, new_rail, new_yard)
 
 	# 3. Transfer persistent train onto new entry track
+	if new_rail.has_method("set_unit_type_map"):
+		new_rail.set_unit_type_map(consist_type_map)
 	new_rail.active_units = consist_order.duplicate()
 	new_rail.controlled_power_unit_id = controlled_power_id
 	new_rail.powered_unit_conditions = powered_conditions
@@ -150,6 +247,7 @@ func request_transition() -> bool:
 	if crew != null:
 		crew.reset_for_new_sector(new_rail, new_yard)
 	_link_scavenging_context()
+	_bind_resource_capacity_provider()
 	if task_broker != null:
 		task_broker.rail = new_rail
 		task_broker.yard = new_yard
@@ -208,6 +306,13 @@ func _link_scavenging_context() -> void:
 		crew.set_scavenging_context(current_sector.pois, train_resources)
 
 
+func _bind_resource_capacity_provider() -> void:
+	if train_resources == null or current_sector == null or current_sector.rail == null:
+		return
+	if train_resources.has_method("bind_capacity_provider"):
+		train_resources.bind_capacity_provider(current_sector.rail)
+
+
 func _prepare_scenario_departure_context() -> void:
 	if scenario_coordinator == null or not scenario_coordinator.has_method("prepare_departure_for_exit"):
 		return
@@ -221,6 +326,10 @@ func _create_sector_definition(sector_index: int) -> SectorDefinition:
 	var route_profile := run_state.next_sector_profile
 	if route_profile.is_empty():
 		route_profile = "forward"
+	return _create_sector_definition_for_profile(sector_index, route_profile)
+
+
+func _create_sector_definition_for_profile(sector_index: int, route_profile: String) -> SectorDefinition:
 	if sector_definition_provider != null and sector_definition_provider.has_method("create_definition"):
 		return sector_definition_provider.create_definition(run_state.run_seed, sector_index, route_profile)
 	return SectorDefinition.create_for_index(run_state.run_seed, sector_index)

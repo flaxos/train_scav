@@ -58,9 +58,10 @@ func _init() -> void:
 
 	var lines: Array[String] = scene.get_uat_tutorial_lines()
 	var tutorial_text := "\n".join(lines)
-	_expect(tutorial_text.contains("UAT Guide"), "scene has an in-game UAT guide")
-	_expect(tutorial_text.contains("Train Scav - Sprint 8 UAT Guide"), "UAT guide names Sprint 8")
-	_expect(tutorial_text.contains("vertical slice"), "UAT guide explains the vertical-slice goal")
+	_expect(tutorial_text.contains("Train Scav - Sprint 11 UAT"), "scene has an in-game UAT guide")
+	_expect(tutorial_text.contains("Sprint 11 Procgen Check"), "UAT guide includes the current sprint load check")
+	_expect(tutorial_text.contains("bounded procedural railway variety"), "UAT guide explains the current procgen goal")
+	_expect(tutorial_text.contains("vertical slice"), "UAT guide preserves the opening vertical-slice context")
 	_expect(tutorial_text.contains("Discover != owned"), "UAT guide explains search versus deposit")
 	_expect(tutorial_text.contains("Departure requires all crew aboard and diesel"), "UAT guide explains crew return and diesel before departure")
 	_expect(tutorial_text.contains("Coupled W != online"), "UAT guide explains workshop activation after coupling")

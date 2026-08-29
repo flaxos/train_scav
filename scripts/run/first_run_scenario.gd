@@ -62,8 +62,23 @@ func attach(lifecycle_model: RefCounted, crew_sim: RefCounted, broker: RefCounte
 		configure_sector(lifecycle.current_sector)
 
 
+func detach() -> void:
+	if crew != null and crew.has_method("set_scenario_context"):
+		crew.set_scenario_context(null)
+	if task_broker != null:
+		task_broker.scenario = null
+	if lifecycle != null and lifecycle.has_method("clear_scenario_coordinator"):
+		lifecycle.clear_scenario_coordinator()
+	lifecycle = null
+	crew = null
+	task_broker = null
+
+
 func configure_sector(sector: RefCounted) -> void:
 	if sector == null or sector.rail == null:
+		return
+	if sector.definition != null and sector.definition.has_method("is_procedural") and sector.definition.is_procedural():
+		last_status = "Entered generated %s" % str(sector.definition.archetype_id)
 		return
 
 	var rail: RefCounted = sector.rail
