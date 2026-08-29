@@ -74,7 +74,7 @@ func test_scene_exposes_vertical_slice_guidance_and_actions() -> void:
 		return
 
 	var guide := "\n".join(scene.get_uat_tutorial_lines())
-	_expect(guide.contains("Train Scav - Sprint 11 UAT"), "guide names the current sprint")
+	_expect(guide.contains("Train Scav - Sprint 12 UAT"), "guide names the current sprint")
 	_expect(guide.contains("Sprint 11 Procgen Check"), "guide includes the current sprint load check")
 	_expect(guide.contains("vertical slice"), "guide explains this is the vertical slice")
 	_expect(guide.contains("Shunter S appears in Sector 1"), "guide explains shunter is not in the opening sector")

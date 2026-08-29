@@ -115,7 +115,7 @@ func _normal_scene_exposes_sprint11_load_check() -> void:
 		_expect(joined.contains("6005"), "Sprint 11 load check mentions agricultural fixture seed")
 		_expect(joined.contains("river_valley_constrained"), "Sprint 11 load check mentions river-valley fixture")
 	var guide := "\n".join(scene.get_uat_tutorial_lines())
-	_expect(guide.contains("Train Scav - Sprint 11 UAT"), "normal startup guide names Sprint 11")
+	_expect(guide.contains("Train Scav - Sprint 12 UAT"), "normal startup guide names Sprint 12")
 	_expect(guide.contains("Sprint 11 Procgen Check"), "normal startup guide includes Sprint 11 load check")
 
 	scene.queue_free()

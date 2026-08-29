@@ -134,6 +134,25 @@ func get_worldgen_debug_state() -> Dictionary:
 	}
 
 
+func get_route_exit(exit_id: String) -> Dictionary:
+	for exit_def in route_exits:
+		if str(exit_def.get("id", "")) == exit_id or str(exit_def.get("route_id", "")) == exit_id:
+			return exit_def.duplicate(true)
+	return {}
+
+
+func get_route_exit_for_segment(segment_id: String) -> Dictionary:
+	for exit_def in route_exits:
+		if str(exit_def.get("segment", "")) == segment_id:
+			return exit_def.duplicate(true)
+	return {}
+
+
+func get_route_exit_requirements(exit_id: String) -> Dictionary:
+	var exit_def := get_route_exit(exit_id)
+	return (exit_def.get("requirements", {}) as Dictionary).duplicate(true)
+
+
 static func _create_default_route_exits() -> Array[Dictionary]:
 	return [
 		{
@@ -144,6 +163,9 @@ static func _create_default_route_exits() -> Array[Dictionary]:
 			"profile": "forward",
 			"segment": RailMovement.SEGMENT_MAIN_EXIT,
 			"distance": 260.0,
+			"requirements": {
+				"require_traction": true,
+			},
 		},
 	]
 
@@ -158,6 +180,10 @@ static func _create_industrial_route_exits() -> Array[Dictionary]:
 			"profile": "direct",
 			"segment": RailMovement.SEGMENT_MAIN_EXIT,
 			"distance": 260.0,
+			"requirements": {
+				"max_mass": 250.0,
+				"require_traction": true,
+			},
 		},
 		{
 			"id": "industrial_exit",
@@ -167,6 +193,11 @@ static func _create_industrial_route_exits() -> Array[Dictionary]:
 			"profile": "industrial",
 			"segment": RailMovement.SEGMENT_INDUSTRIAL_EXIT,
 			"distance": 220.0,
+			"requirements": {
+				"max_mass": 320.0,
+				"require_traction": true,
+				"required_capabilities": ["workshop"],
+			},
 		},
 		{
 			"id": "settlement_exit",
@@ -176,6 +207,11 @@ static func _create_industrial_route_exits() -> Array[Dictionary]:
 			"profile": "settlement",
 			"segment": RailMovement.SEGMENT_SETTLEMENT_EXIT,
 			"distance": 220.0,
+			"requirements": {
+				"max_length": 300.0,
+				"require_traction": true,
+				"required_capabilities": ["crew_accommodation"],
+			},
 		},
 	]
 
@@ -190,6 +226,9 @@ static func _create_generated_route_exits(exit_segment_id: String, exit_at_dista
 			"profile": "forward",
 			"segment": exit_segment_id,
 			"distance": exit_at_distance,
+			"requirements": {
+				"require_traction": true,
+			},
 		},
 	]
 

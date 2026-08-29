@@ -661,6 +661,21 @@ func get_total_mass() -> float:
 	return total
 
 
+func get_total_length() -> float:
+	return _get_active_consist_length()
+
+
+func get_mobility_summary() -> Dictionary:
+	return {
+		"total_mass": get_total_mass(),
+		"total_length": get_total_length(),
+		"unit_count": active_units.size(),
+		"has_traction": has_traction_authority(),
+		"powered_unit_id": str(controlled_power_unit_id),
+		"capabilities": get_train_capabilities(),
+	}
+
+
 func set_unit_type(unit_id: String, type_id: String) -> bool:
 	if unit_id == "" or not RollingStockCatalog.has_type(type_id):
 		return false

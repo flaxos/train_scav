@@ -12,6 +12,7 @@ const SectorInstance := preload("res://scripts/sector/sector_instance.gd")
 const RailMovement := preload("res://scripts/rail/rail_movement.gd")
 const YardOperations := preload("res://scripts/yard/yard_operations.gd")
 const TrainResources := preload("res://scripts/train/train_resources.gd")
+const RouteRequirementEvaluator := preload("res://scripts/sector/route_requirement_evaluator.gd")
 
 var run_state: RunState
 var current_sector: SectorInstance
@@ -164,6 +165,10 @@ func can_depart() -> bool:
 		if scenario_reason != "":
 			transition_blocked_reason = scenario_reason
 			return false
+	var exit_eval := evaluate_crossed_or_default_route_exit()
+	if not bool(exit_eval.get("can_take_route", true)):
+		transition_blocked_reason = str(exit_eval.get("primary_reason", "Departure blocked: Route requirements not met"))
+		return false
 	if train_resources != null and not train_resources.can_afford(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
 		transition_blocked_reason = "Departure blocked: need %.0f diesel (have %.0f)" % [
 			TrainResources.DEPARTURE_DIESEL_COST,
@@ -171,6 +176,47 @@ func can_depart() -> bool:
 		]
 		return false
 	return true
+
+
+func evaluate_crossed_or_default_route_exit() -> Dictionary:
+	var exit_state: Dictionary = {}
+	if current_sector != null and current_sector.has_method("get_crossed_exit"):
+		exit_state = current_sector.get_crossed_exit()
+	if exit_state.is_empty() and current_sector != null and current_sector.definition != null:
+		var curr_seg := str(current_sector.rail.current_segment) if current_sector.rail != null else ""
+		for candidate in current_sector.definition.route_exits:
+			if str(candidate.get("segment", "")) == curr_seg:
+				exit_state = candidate
+				break
+		if exit_state.is_empty() and run_state != null and run_state.route_choice != "":
+			for candidate in current_sector.definition.route_exits:
+				if str(candidate.get("route_id", candidate.get("id", ""))) == run_state.route_choice:
+					exit_state = candidate
+					break
+		if exit_state.is_empty() and not current_sector.definition.route_exits.is_empty():
+			exit_state = current_sector.definition.route_exits[0]
+	return evaluate_route_exit(exit_state)
+
+
+func evaluate_route_exit(exit_state: Dictionary) -> Dictionary:
+	if exit_state.is_empty() or current_sector == null or current_sector.rail == null:
+		return {
+			"can_take_route": true,
+			"blocked_reasons": [] as Array[String],
+			"primary_reason": "",
+			"details": {},
+		}
+	var requirements: Dictionary = exit_state.get("requirements", {})
+	if requirements.is_empty():
+		return {
+			"can_take_route": true,
+			"blocked_reasons": [] as Array[String],
+			"primary_reason": "",
+			"details": {},
+		}
+	var mobility: Dictionary = current_sector.rail.get_mobility_summary()
+	var exit_label := str(exit_state.get("label", exit_state.get("route_id", "Route")))
+	return RouteRequirementEvaluator.evaluate(mobility, requirements, exit_label)
 
 
 func step() -> bool:

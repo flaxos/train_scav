@@ -124,9 +124,7 @@ func get_departure_blocked_reason() -> String:
 		if onboard_fault_state == STATE_ACTIVE:
 			return "Departure blocked: onboard fault needs engineer response"
 	elif phase == PHASE_INDUSTRIAL:
-		if not is_workshop_recovered():
-			return "Departure blocked: recover workshop wagon W first"
-		if workshop_state != STATE_ONLINE:
+		if is_workshop_recovered() and workshop_state != STATE_ONLINE:
 			return "Departure blocked: workshop wagon W is not online"
 		if selected_route == "":
 			return "Departure blocked: choose the next route by driving onto a marked exit branch"
@@ -271,8 +269,6 @@ func prepare_departure_for_exit(exit_state: Dictionary) -> void:
 		return
 	var state := get_state()
 	if str(state.get("phase", "")) != PHASE_INDUSTRIAL:
-		return
-	if not bool(state.get("workshop_recovered", false)) or workshop_state != STATE_ONLINE:
 		return
 	var route_id := str(exit_state.get("route_id", exit_state.get("id", "")))
 	_apply_route_from_exit(route_id)

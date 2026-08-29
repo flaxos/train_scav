@@ -4,9 +4,9 @@ Top-down 2D Godot train-survival colony prototype.
 
 ## Active Sprint
 
-Sprint 12: Mobility, Burden & Route Requirements — Planning phase.
+Sprint 12: Mobility, Burden & Route Requirements.
 
-(Sprint 10 Rolling-Stock Ecosystem and Sprint 11 Procgen Variety Pass are complete and passed human UAT).
+Sprint 12 introduces a standardized train mobility summary and explicit route requirements for sector exits. Sprint 10 rolling-stock salvage remains seeded only into `small_town_goods`; physical coupling remains the only ownership path.
 
 Known Sprint 11 generated-sector UAT seeds for sector 2 on the `industrial` route:
 

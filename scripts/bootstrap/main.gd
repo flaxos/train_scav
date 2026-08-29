@@ -13,6 +13,8 @@ const RollingStockCatalog := preload("res://scripts/train/rolling_stock_catalog.
 const FirstRunScenario := preload("res://scripts/run/first_run_scenario.gd")
 const WorldgenProductionSectorGenerator := preload("res://scripts/worldgen/worldgen_production_sector_generator.gd")
 const WorldgenSemanticGenerator := preload("res://scripts/worldgen/worldgen_semantic_generator.gd")
+const RouteRequirementEvaluator := preload("res://scripts/sector/route_requirement_evaluator.gd")
+const OperationalUIPresenter := preload("res://scripts/ui/operational_ui_presenter.gd")
 
 const BACKGROUND_COLOR := Color(0.055, 0.062, 0.071, 1.0)
 const ROUTE_MAIN_COLOR := Color(0.30, 0.75, 0.95, 1.0)
@@ -134,6 +136,7 @@ var _ui_refresh_elapsed: float = 0.0
 var _ui_panel_refresh_count: int = 0
 var _sprint10_preflight_state: Dictionary = {}
 var _sprint11_preflight_state: Dictionary = {}
+var debug_mode_enabled: bool = false
 
 
 func _ready() -> void:
@@ -313,8 +316,11 @@ func get_compact_debug_lines() -> Array[String]:
 		if not workshop_visual.is_empty():
 			lines.append("Workshop W: %s" % str(workshop_visual.get("status", "")))
 	var controlled_power := rail.get_controlled_power_unit_id()
-	lines.append("Consist: %s  Control: %s (%s)" % [
+	var mobility := rail.get_mobility_summary()
+	lines.append("Consist: %s (%.1ft, %.0fpx)  Control: %s (%s)" % [
 		rail.get_consist_summary(),
+		float(mobility.get("total_mass", 0.0)),
+		float(mobility.get("total_length", 0.0)),
 		controlled_power,
 		"driver" if _controlled_power_has_crew() else "no driver",
 	])
@@ -798,14 +804,14 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 		{
 			"point_id": YardOperations.POINT_P1,
 			"position": RailMovement.SWITCH_POSITION,
-			"control_label": "P1 controls main / siding A",
+			"control_label": "P1 controls Main Line / Siding A",
 			"label_position": RailMovement.SWITCH_POSITION + Vector2(-82.0, -42.0),
 			"active_kind": p1_active_kind,
 			"options": [
 				{
 					"kind": "straight",
 					"route": RailMovement.POINTS_MAIN,
-					"label": _format_route_option_label("straight", "MAIN", p1_active_kind == "straight"),
+					"label": _format_route_option_label("straight", "MAIN LINE", p1_active_kind == "straight"),
 					"target_segment": RailMovement.SEGMENT_MAIN_EAST,
 					"active": p1_active_kind == "straight",
 					"guide_start": RailMovement.SWITCH_POSITION + Vector2(10.0, -6.0),
@@ -827,14 +833,14 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 		{
 			"point_id": YardOperations.POINT_P2,
 			"position": p2_position,
-			"control_label": "P2 controls north workshop branch",
+			"control_label": "P2 controls Direct Line / Industrial Line",
 			"label_position": p2_position + Vector2(-92.0, -102.0),
 			"active_kind": p2_active_kind,
 			"options": [
 				{
 					"kind": "straight",
 					"route": RailMovement.POINTS_MAIN,
-					"label": _format_route_option_label("straight", "MAIN", p2_active_kind == "straight"),
+					"label": _format_route_option_label("straight", "DIRECT LINE", p2_active_kind == "straight"),
 					"target_segment": RailMovement.SEGMENT_MAIN_EXIT,
 					"active": p2_active_kind == "straight",
 					"guide_start": p2_position + Vector2(-126.0, 8.0),
@@ -844,7 +850,7 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 				{
 					"kind": "branch",
 					"route": RailMovement.POINTS_SIDING,
-					"label": _format_route_option_label("branch", "NORTH W", p2_active_kind == "branch"),
+					"label": _format_route_option_label("branch", "INDUSTRIAL LINE", p2_active_kind == "branch"),
 					"target_segment": RailMovement.SEGMENT_SIDING_B,
 					"active": p2_active_kind == "branch",
 					"guide_start": p2_position + Vector2(8.0, -7.0),
@@ -856,14 +862,14 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 		{
 			"point_id": YardOperations.POINT_P3,
 			"position": p3_position,
-			"control_label": "P3 yard ladder: storage / repair",
+			"control_label": "P3 controls Storage / Repair Sidings",
 			"label_position": p3_position + Vector2(-85.0, -72.0),
 			"active_kind": p3_active_kind,
 			"options": [
 				{
 					"kind": "straight",
 					"route": RailMovement.POINTS_MAIN,
-					"label": _format_route_option_label("straight", "STORAGE", p3_active_kind == "straight"),
+					"label": _format_route_option_label("straight", "STORAGE SIDING", p3_active_kind == "straight"),
 					"target_segment": RailMovement.SEGMENT_YARD_STORAGE,
 					"active": p3_active_kind == "straight",
 					"guide_start": p3_position + Vector2(10.0, 0.0),
@@ -873,7 +879,7 @@ func get_switch_route_visual_states() -> Array[Dictionary]:
 				{
 					"kind": "branch",
 					"route": RailMovement.POINTS_SIDING,
-					"label": _format_route_option_label("branch", "REPAIR", p3_active_kind == "branch"),
+					"label": _format_route_option_label("branch", "REPAIR SIDING", p3_active_kind == "branch"),
 					"target_segment": RailMovement.SEGMENT_YARD_REPAIR,
 					"active": p3_active_kind == "branch",
 					"guide_start": p3_position + Vector2(8.0, 8.0),
@@ -912,8 +918,8 @@ func get_current_uat_step_index() -> int:
 
 func get_uat_tutorial_lines() -> Array[String]:
 	var lines: Array[String] = [
-		"Train Scav - Sprint 11 UAT",
-		"Goal: prove bounded procedural railway variety.",
+		"Train Scav - Sprint 12 UAT",
+		"Goal: prove mobility summary and route requirements.",
 	]
 	for line in get_sprint11_preflight_lines():
 		lines.append(line)
@@ -929,7 +935,7 @@ func get_uat_tutorial_lines() -> Array[String]:
 		"Coupled W != online; activate it.",
 		"Final route: drive onto a marked exit branch.",
 		"Shunter S appears in Sector 1 after first departure.",
-		"Departure requires all crew aboard and diesel.",
+		"Departure requires all crew aboard, diesel, and route requirements.",
 		"Departure blockers show in Objective/Status.",
 	])
 	var steps := _get_uat_step_states()
@@ -1096,6 +1102,11 @@ func _input(event: InputEvent) -> void:
 			if key_event.pressed and task_broker != null:
 				task_broker.enabled = not task_broker.enabled
 				yard.last_status = "Auto dispatch: %s" % ("ENABLED" if task_broker.enabled else "DISABLED")
+		KEY_F3, KEY_QUOTELEFT:
+			if key_event.pressed:
+				debug_mode_enabled = not debug_mode_enabled
+				_refresh_side_panel_text(true)
+				queue_redraw()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -1119,6 +1130,8 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	if rail == null or crew == null:
+		return
 	draw_rect(Rect2(Vector2.ZERO, size), BACKGROUND_COLOR, true)
 	draw_rect(get_playfield_rect(), BACKGROUND_COLOR.lightened(0.02), true)
 	draw_set_transform(_get_world_draw_offset(), 0.0, Vector2(_get_world_draw_scale(), _get_world_draw_scale()))
@@ -1156,9 +1169,7 @@ func _draw_sector_exit() -> void:
 	for exit_state in exits:
 		var exit_pos := exit_state.get("position", Vector2.ZERO) as Vector2
 		var route_id := str(exit_state.get("route_id", exit_state.get("id", "")))
-		var label := str(exit_state.get("label", "Exit boundary"))
-		if route_id == "forward":
-			label = "EXIT BOUNDARY"
+		var label := OperationalUIPresenter.clean_route_label(exit_state).to_upper()
 		var color := exit_color
 		if route_id == "industrial":
 			color = Color(0.96, 0.67, 0.24, 0.95)
@@ -1167,7 +1178,7 @@ func _draw_sector_exit() -> void:
 		elif route_id == "direct":
 			color = Color(0.65, 0.72, 0.82, 0.95)
 		draw_line(exit_pos + Vector2(0.0, -32.0), exit_pos + Vector2(0.0, 32.0), color, 4.0)
-		draw_string(get_theme_default_font(), exit_pos + Vector2(-44.0, -38.0), label.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, color)
+		draw_string(get_theme_default_font(), exit_pos + Vector2(-54.0, -38.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, color)
 
 
 func _draw_sector_entry() -> void:
@@ -2005,6 +2016,59 @@ func _step_side_panel_refresh(delta: float) -> void:
 	_refresh_side_panel_text(false)
 
 
+func get_player_routes_panel_lines() -> Array[String]:
+	if lifecycle == null or lifecycle.current_sector == null:
+		return []
+	var sec_def: SectorDefinition = lifecycle.current_sector.definition
+	var mobility: Dictionary = rail.get_mobility_summary() if rail != null else {}
+	var scenario_state: Dictionary = scenario.get_state() if scenario != null else {}
+	var active_switches := {
+		"P1": rail.points_route if rail != null else "main",
+		"P2": rail.get_yard_point_route(YardOperations.POINT_P2) if rail != null else "main",
+		"P3": rail.get_yard_point_route(YardOperations.POINT_P3) if rail != null else "siding",
+	}
+	var departure_blocker := _get_departure_blocker_text()
+	return OperationalUIPresenter.format_player_routes_panel(sec_def, mobility, scenario_state, active_switches, departure_blocker)
+
+
+func get_player_status_panel_lines() -> Array[String]:
+	if rail == null:
+		return []
+	var mobility: Dictionary = rail.get_mobility_summary()
+	var consist_summary := rail.get_consist_summary()
+	var controlled_power := rail.get_controlled_power_unit_id()
+	var has_driver := _controlled_power_has_crew()
+	var workshop_online := true
+	if scenario != null:
+		var st := scenario.get_state()
+		workshop_online = bool(st.get("workshop_online", false))
+	var top_status := _latest_status_line()
+	var auto_enabled: bool = bool(task_broker.enabled) if task_broker != null else false
+	var active_switches := {
+		"P1": rail.points_route if rail != null else "main",
+		"P2": rail.get_yard_point_route(YardOperations.POINT_P2) if rail != null else "main",
+		"P3": rail.get_yard_point_route(YardOperations.POINT_P3) if rail != null else "siding",
+	}
+	var yard_control := yard.get_yard_control_state() if yard != null else {}
+	return OperationalUIPresenter.format_player_status_panel(
+		mobility,
+		consist_summary,
+		controlled_power,
+		has_driver,
+		workshop_online,
+		train_resources,
+		crew,
+		top_status,
+		auto_enabled,
+		rail.speed,
+		rail.throttle,
+		rail.brake_active,
+		rail.direction,
+		active_switches,
+		yard_control
+	)
+
+
 func _refresh_side_panel_text(force: bool = false) -> void:
 	if not force and _ui_refresh_elapsed < UI_REFRESH_INTERVAL:
 		return
@@ -2012,12 +2076,20 @@ func _refresh_side_panel_text(force: bool = false) -> void:
 	_ui_panel_refresh_count += 1
 
 	if instruction_label != null:
-		var instruction_text := "\n".join(get_uat_tutorial_lines())
+		var instruction_text := ""
+		if debug_mode_enabled:
+			instruction_text = "\n".join(get_uat_tutorial_lines())
+		else:
+			instruction_text = "\n".join(get_player_routes_panel_lines())
 		if force or instruction_label.text != instruction_text:
 			instruction_label.text = instruction_text
 
 	if debug_label != null:
-		var debug_text := "\n".join(get_compact_debug_lines())
+		var debug_text := ""
+		if debug_mode_enabled:
+			debug_text = "\n".join(get_compact_debug_lines())
+		else:
+			debug_text = "\n".join(get_player_status_panel_lines())
 		if force or debug_label.text != debug_text:
 			debug_label.text = debug_text
 
@@ -2239,6 +2311,8 @@ func _get_current_objective_text() -> String:
 func _get_departure_blocker_text() -> String:
 	if lifecycle == null:
 		return ""
+	if str(lifecycle.transition_blocked_reason) != "":
+		return str(lifecycle.transition_blocked_reason)
 	if crew != null and not crew.are_all_survivors_aboard():
 		var unboarded: Array[String] = crew.get_unboarded_survivor_names()
 		return "Departure blocked: Survivor(s) in yard (%s)" % ", ".join(unboarded)
@@ -2246,6 +2320,10 @@ func _get_departure_blocker_text() -> String:
 		var scenario_reason := str(scenario.get_departure_blocked_reason())
 		if scenario_reason != "":
 			return scenario_reason
+	if lifecycle.current_sector != null and lifecycle.current_sector.is_exit_crossed():
+		var exit_eval: Dictionary = lifecycle.evaluate_crossed_or_default_route_exit() if lifecycle.has_method("evaluate_crossed_or_default_route_exit") else {}
+		if not bool(exit_eval.get("can_take_route", true)):
+			return str(exit_eval.get("primary_reason", "Departure blocked: Route requirements not met"))
 	if train_resources != null and not train_resources.can_afford(TrainResources.RESOURCE_DIESEL, TrainResources.DEPARTURE_DIESEL_COST):
 		return "Departure blocked: need %.0f diesel (have %.0f)" % [
 			TrainResources.DEPARTURE_DIESEL_COST,
@@ -2976,6 +3054,19 @@ func _build_departure_confirmation_lines() -> Array[String]:
 	var selected_route_label := _get_selected_route_label()
 	if selected_route_label != "":
 		lines.append("Route branch: %s" % selected_route_label)
+	var mobility: Dictionary = rail.get_mobility_summary() if rail != null else {}
+	lines.append("Train Mobility: Mass %.1ft | Length %.0fpx | Units %d" % [
+		float(mobility.get("total_mass", 0.0)),
+		float(mobility.get("total_length", 0.0)),
+		int(mobility.get("unit_count", 0)),
+	])
+	var crossed_exit: Dictionary = {}
+	if lifecycle.current_sector != null:
+		crossed_exit = lifecycle.current_sector.get_crossed_exit()
+	if not crossed_exit.is_empty():
+		var reqs: Dictionary = crossed_exit.get("requirements", {})
+		if not reqs.is_empty():
+			lines.append("Route requirements: %s" % RouteRequirementEvaluator.format_requirements_summary(reqs))
 	lines.append("Departing consist: %s" % rail.get_consist_summary())
 	lines.append("Rolling stock left behind: %s" % rail.get_detached_summary())
 	lines.append("Uncollected POI supplies are abandoned with this sector.")
@@ -3115,30 +3206,36 @@ func _screen_to_world(position: Vector2) -> Vector2:
 
 
 func _latest_status_line() -> String:
-	if departure_confirmation_open:
-		return "Confirm departure: click Yes - leave sector or press Enter/Y; No/Esc cancels"
-
-	var selected := crew.get_survivor_state(crew.get_selected_survivor_id())
-	if not selected.is_empty():
-		var selected_status := str(selected.get("status_text", ""))
-		var task_status := str(selected.get("task_status", ""))
-		if selected_status != "" and selected_status != "Idle" and _task_status_has_current_feedback(task_status):
-			return selected_status
-	if rail.blocked_reason != "":
-		return rail.blocked_reason
-
 	var departure_blocker := _get_departure_blocker_text()
-	if _is_current_departure_attempt_blocker(departure_blocker):
-		return departure_blocker
-	if scenario != null and scenario.last_status != "" and scenario.last_status != "First run started":
-		return scenario.last_status
-	if yard.last_status != "":
-		return yard.last_status
-	if departure_blocker != "":
-		return departure_blocker
+	var selected := crew.get_survivor_state(crew.get_selected_survivor_id()) if crew != null else {}
+	var selected_status := ""
 	if not selected.is_empty():
-		return str(selected.get("status_text", ""))
-	return ""
+		var task_status := str(selected.get("task_status", ""))
+		if _task_status_has_current_feedback(task_status):
+			selected_status = str(selected.get("status_text", ""))
+
+	var recent_command := ""
+	if rail != null and rail.blocked_reason != "":
+		recent_command = rail.blocked_reason
+	elif yard != null and yard.last_status != "":
+		recent_command = yard.last_status
+
+	var scenario_status := ""
+	if scenario != null and scenario.last_status != "" and scenario.last_status != "First run started":
+		scenario_status = scenario.last_status
+
+	var objective := _get_current_objective_text()
+	var idle_status := str(selected.get("status_text", "")) if not selected.is_empty() else ""
+
+	return OperationalUIPresenter.get_top_priority_status_message(
+		departure_blocker,
+		departure_confirmation_open,
+		recent_command,
+		selected_status,
+		objective,
+		scenario_status,
+		idle_status
+	)
 
 
 func _task_status_has_current_feedback(task_status: String) -> bool:

@@ -116,7 +116,7 @@ func _normal_scene_exposes_sprint10_load_check() -> void:
 	_expect(joined.contains("parts_flatbed"), "load check lines mention flatbed seed")
 	_expect(joined.contains("boxcar_storage"), "load check lines mention boxcar seed")
 	var guide := "\n".join(scene.get_uat_tutorial_lines())
-	_expect(guide.contains("Train Scav - Sprint 11 UAT"), "normal startup guide names current Sprint 11 UAT")
+	_expect(guide.contains("Train Scav - Sprint 12 UAT"), "normal startup guide names current Sprint 12 UAT")
 	_expect(guide.contains("Sprint 10 salvage seeds remain active"), "normal startup guide keeps Sprint 10 salvage compatibility visible")
 
 	scene.queue_free()
